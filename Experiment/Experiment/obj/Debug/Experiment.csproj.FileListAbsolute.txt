@@ -5,3 +5,6 @@ E:\Code\CTS\Experiment\Experiment\obj\Debug\Experiment.csprojResolveAssemblyRefe
 E:\Code\CTS\Experiment\Experiment\obj\Debug\Experiment.exe
 E:\Code\CTS\Experiment\Experiment\obj\Debug\Experiment.pdb
 E:\Code\CTS\Experiment\Experiment\bin\Debug\pic.jpg
+C:\Users\bblondin\Documents\Code\CTS\Experiment\Experiment\bin\Debug\Experiment.exe.config
+C:\Users\bblondin\Documents\Code\CTS\Experiment\Experiment\obj\Debug\Experiment.exe
+C:\Users\bblondin\Documents\Code\CTS\Experiment\Experiment\obj\Debug\Experiment.pdb
