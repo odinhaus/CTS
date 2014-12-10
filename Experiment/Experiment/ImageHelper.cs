@@ -287,13 +287,14 @@ namespace Experiment
         {
             Bitmap reduce0 = null;
             double[][] coeffs0;
-            ImageHelper.Dwt97Y(imaget0, out reduce0, out coeffs0); // LL1
+            
+            ImageHelper.Dwt97Y(ImageHelper.Transform(imaget0, ImageHelper.EDGE_HEAVY_KNL), out reduce0, out coeffs0); // LL1
             ImageHelper.Dwt97Y(reduce0, out reduce0, out coeffs0); // LL2
             ImageHelper.Dwt97Y(reduce0, out reduce0, out coeffs0); // LL3
 
             Bitmap reduce1 = null;
             double[][] coeffs1;
-            ImageHelper.Dwt97Y(imaget1, out reduce1, out coeffs1); // LL1
+            ImageHelper.Dwt97Y(ImageHelper.Transform(imaget1, ImageHelper.EDGE_HEAVY_KNL), out reduce1, out coeffs1); // LL1
             ImageHelper.Dwt97Y(reduce1, out reduce1, out coeffs1); // LL2
             ImageHelper.Dwt97Y(reduce1, out reduce1, out coeffs1); // LL3
 

@@ -102,7 +102,7 @@ namespace Experiment
             //    Debug.WriteLine("");
             //}
             Point p = ImageHelper.FindMotionMaxLL3("1.jpg", "2.jpg", 8);
-            Point p2 = ImageHelper.FindMotionMaxLL3("4.jpg", "5.jpg", 8);
+            Point p2 = ImageHelper.FindMotionMaxLL3("2.jpg", "3.jpg", 8);
         }
 
         static void printf(string value)
