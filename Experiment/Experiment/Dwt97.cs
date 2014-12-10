@@ -10,16 +10,16 @@ namespace Experiment
     {
 
         /**
- *  fwt97 - Forward biorthogonal 9/7 wavelet transform (lifting implementation)
- *
- *  x is an input signal, which will be replaced by its output transform.
- *  n is the length of the signal, and must be a power of 2.
- *
- *  The first half part of the output signal contains the approximation coefficients.
- *  The second half part contains the detail coefficients (aka. the wavelets coefficients).
- *
- *  See also iwt97.
- */
+         *  fwt97 - Forward biorthogonal 9/7 wavelet transform (lifting implementation)
+         *
+         *  x is an input signal, which will be replaced by its output transform.
+         *  n is the length of the signal, and must be a power of 2.
+         *
+         *  The first half part of the output signal contains the approximation coefficients.
+         *  The second half part contains the detail coefficients (aka. the wavelets coefficients).
+         *
+         *  See also iwt97.
+         */
 
         /*
         void fwt97(double* x, int n)
@@ -132,6 +132,15 @@ namespace Experiment
 
             for (i = 0; i < n; i++) 
                 x[i] = tempbank[i];
+        }
+
+        public static void Transform(ref double[][] xy)
+        {
+            for (int x = 0; x < xy.GetLength(0); x++)
+            {
+                double[] y = xy[x];
+                Transform(ref y);
+            }
         }
 
         /**

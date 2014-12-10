@@ -184,6 +184,79 @@ namespace Experiment
             pixelDest[1] = Clamp(sumB);
         }
 
+        public unsafe static void Dwt97Y(Bitmap source, out Bitmap reduction, out double[][] coefficients)
+        {
+            double logWidth = Math.Log(source.Width, 2);
+            if (logWidth % 1 > double.Epsilon) 
+                throw new ArgumentException("Image width must be a factor of 2^N.");
+            int maxHeight = (source.Height/2)*2; // cuts off off numbers
+            reduction = new Bitmap(source.Width/2, source.Height/2, PixelFormat.Format24bppRgb);
+            coefficients = new double[source.Height/2][];
+            BitmapData bdSource = source.LockBits(new Rectangle(new Point(0, 0), new Size(source.Width, source.Height)),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                source.PixelFormat);
+            BitmapData bdReduction = reduction.LockBits(new Rectangle(new Point(0, 0), new Size(reduction.Width, reduction.Height)),
+                System.Drawing.Imaging.ImageLockMode.ReadWrite,
+                reduction.PixelFormat);
+            int bpp = 24;
+
+            try
+            {
+                byte* pixel = (byte*)bdSource.Scan0;
+                byte* pixel0 = pixel;
+
+                byte* pixelR = (byte*)bdReduction.Scan0;
+                byte* pixelR0 = pixelR;
+
+                for (int h = 0; h < maxHeight; h += 2)
+                {
+                    double[] row = new double[source.Width];
+                    coefficients[h/2] = new double[source.Width/2];
+                    for (int w = 0; w < source.Width; w++)
+                    {
+                        pixel = pixel0 + h * bdSource.Stride + w * bpp / 8;
+                        row[w] = (double)(int)Clamp(((66 * (byte)pixel[0] + 129 * (byte)(pixel[1]) + 25 * (byte)(pixel[2]) + 128) >> 8) + 16);
+                    }
+                    Dwt97.Transform(ref row);
+                    int ww = 0;
+                    byte C = 0;
+                    for (ww = 0; ww < row.Length / 2; ww++)
+                    {
+                        pixelR = pixelR0 + (h/2) * bdReduction.Stride + ww * bpp / 8;
+                        C = (byte)((byte)row[ww] - 16);
+
+                        pixelR[0] = C;
+                        pixelR[1] = C;
+                        pixelR[2] = C;
+                    }
+                    int ww0 = ww;
+                    for (ww = ww0; ww < row.Length; ww++)
+                    {
+                        coefficients[h/2][ww - ww0] = row[ww];
+                    }
+                }
+            }
+            finally
+            {
+                source.UnlockBits(bdSource);
+                reduction.UnlockBits(bdReduction);
+            }
+
+        }
+
+        public static Bitmap ScaleByPowerOf2(Bitmap source, byte factor)
+        {
+            double newWidth = Math.Pow(2, factor);
+            double scaling = newWidth/(double)source.Width;
+            double newHeight = source.Height*scaling;
+            Size newSize = new Size((int)newWidth, (int)newHeight);
+            Bitmap dest = new Bitmap(newSize.Width, newSize.Height, PixelFormat.Format24bppRgb);
+            Graphics g = Graphics.FromImage(dest);
+            g.DrawImage(source,new Rectangle(new Point(0,0), newSize));
+            g.Dispose();
+            return dest;
+        }
+
         public static byte Clamp(int value)
         {
             if (value < 0) return 0;
@@ -196,6 +269,82 @@ namespace Experiment
             if (value < 0) return 0;
             if (value > 255) return 255;
             return (byte)value;
+        }
+
+        public static Point FindMotionMaxLL3(string bitmapT0Path, string bitmapT1Path, byte scaledBy2Power = 0)
+        {
+            Bitmap t0 = new Bitmap(bitmapT0Path);
+            Bitmap t1 = new Bitmap(bitmapT1Path);
+            if (scaledBy2Power > 0)
+            {
+                t0 = ScaleByPowerOf2(t0, scaledBy2Power);
+                t1 = ScaleByPowerOf2(t1, scaledBy2Power);
+            }
+            return FindMotionMaxLL3(t0, t1);
+        }
+
+        public static Point FindMotionMaxLL3(Bitmap imaget0, Bitmap imaget1)
+        {
+            Bitmap reduce0 = null;
+            double[][] coeffs0;
+            ImageHelper.Dwt97Y(imaget0, out reduce0, out coeffs0); // LL1
+            ImageHelper.Dwt97Y(reduce0, out reduce0, out coeffs0); // LL2
+            ImageHelper.Dwt97Y(reduce0, out reduce0, out coeffs0); // LL3
+
+            Bitmap reduce1 = null;
+            double[][] coeffs1;
+            ImageHelper.Dwt97Y(imaget1, out reduce1, out coeffs1); // LL1
+            ImageHelper.Dwt97Y(reduce1, out reduce1, out coeffs1); // LL2
+            ImageHelper.Dwt97Y(reduce1, out reduce1, out coeffs1); // LL3
+
+            double[][] absDiffs = new double[coeffs0.Length][];
+            for (int r = 0; r < coeffs0.Length; r++)
+            {
+                absDiffs[r] = new double[coeffs0[r].Length];
+                for (int c = 0; c < absDiffs[r].Length; c++)
+                {
+                    absDiffs[r][c] = Math.Abs(coeffs1[r][c] - coeffs0[r][c]);
+                }
+            }
+
+            Point maxPoint = new Point(imaget0.Width/2, imaget0.Height/2);
+            double[] rowSums = new double[coeffs0.Length];
+            for (int r = 0; r < absDiffs.Length; r++)
+            {
+                for (int c = 0; c < absDiffs[r].Length; c++)
+                {
+                    rowSums[r] += absDiffs[r][c];
+                }
+            }
+
+            double[] colSums = new double[coeffs0[0].Length];
+            for (int r = 0; r < absDiffs.Length; r++)
+            {
+                for (int c = 0; c < absDiffs[r].Length; c++)
+                {
+                    colSums[c] += absDiffs[r][c];
+                }
+            }
+
+            double max = double.MinValue;
+            for (int r = 0; r < rowSums.Length; r++)
+            {
+                for (int c = 0; c < colSums.Length; c++)
+                {
+                    double testMax = rowSums[r]*colSums[c];
+                    if (testMax > max)
+                    {
+                        maxPoint.X = c;
+                        maxPoint.Y = r;
+                        max = testMax;
+                    }
+                }
+            }
+
+            maxPoint.X *= 8;
+            maxPoint.Y *= 8;
+
+            return maxPoint;
         }
 
     }
