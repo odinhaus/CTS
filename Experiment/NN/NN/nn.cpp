@@ -14,7 +14,7 @@
 
 #define NUMPAT 9
 #define NUMIN  2
-#define NUMHID 8
+#define NUMHID 5
 #define NUMOUT 1
 
 #define rando() ((double)rand()/(RAND_MAX+1))
@@ -172,6 +172,33 @@ int main() {
 	sprintf_s(str, "\n\Network Trained!\n\n");
 	OutputDebugString(str);   /* print network outputs */
 
+	for (i = 1; i < NUMHID + 1; i++)
+	{
+		sprintf_s(str, "Bias %d: %f\n", i, WeightIH[0][i]);
+		OutputDebugString(str);
+	}
+	for (i = 1; i < NUMIN + 1; i++)
+	{
+		for (j = 1; j < NUMHID + 1; j++)
+		{
+			sprintf_s(str, "Input %d: Hidden %d: Weight: %f\n", i, j, WeightIH[i][j]);
+			OutputDebugString(str);
+		}
+	}
+
+	for (i = 1; i < NUMOUT + 1; i++)
+	{
+		sprintf_s(str, "Bias %d: %f\n", i, WeightHO[0][i]);
+		OutputDebugString(str);
+	}
+	for (i = 1; i < NUMOUT + 1; i++)
+	{
+		for (j = 1; j < NUMHID + 1; j++)
+		{
+			sprintf_s(str, "Output %d: Hidden %d: Weight: %f\n", i, j, WeightHO[i][j]);
+			OutputDebugString(str);
+		}
+	}
 
 	/* test */
 

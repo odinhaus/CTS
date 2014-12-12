@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Experiment
@@ -101,8 +102,13 @@ namespace Experiment
             //    }
             //    Debug.WriteLine("");
             //}
-            Point p = ImageHelper.FindMotionMaxLL3("1.jpg", "2.jpg", 8);
-            Point p2 = ImageHelper.FindMotionMaxLL3("2.jpg", "3.jpg", 8);
+            //Point p = ImageHelper.FindMotionMaxLL3("1.jpg", "2.jpg", 8);
+            //Point p2 = ImageHelper.FindMotionMaxLL3("2.jpg", "3.jpg", 8);
+
+            
+            string val = "1:1:0.5 [0.975] 2:1:2.2 [0.765] 3:1";
+            Network<bool[]> network = Network<bool[]>.Create(val, 3, (idx, signal) => signal[idx] ? 1 : 0);
+            double[] output = network.Update(new bool[] {true, false});
         }
 
         static void printf(string value)
