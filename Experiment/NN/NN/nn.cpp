@@ -35,7 +35,7 @@ void Compute(double *testInput)
 	//testInput = input;
 
 	for (j = 1; j <= NumHidden; j++) {    /* compute hidden unit activations */
-		testSumH[j] = WeightIH[0][j];
+		testSumH[j] = WeightIH[0][j]; // bias
 		for (i = 1; i <= NumInput; i++) {
 			testSumH[j] += testInput[i] * WeightIH[i][j];
 		}
@@ -43,8 +43,12 @@ void Compute(double *testInput)
 	}
 	for (k = 1; k <= NumOutput; k++) {    /* compute output unit activations and errors */
 		testSumO[k] = WeightHO[0][k];
+		sprintf_s(str, "Bias %f\n", testSumO[k]);
+		OutputDebugString(str); 
 		for (j = 1; j <= NumHidden; j++) {
 			testSumO[k] += testHidden[j] * WeightHO[j][k];
+			sprintf_s(str, "HO %f\tW %f\t", testHidden[j], WeightHO[j][k]);
+			OutputDebugString(str); 
 		}
 		//testOutput[k] = 1.0 / (1.0 + exp(-testSumO[k]));   /* Sigmoidal Outputs */
 		testOutput[k] = testSumO[k]; /* Linear Outputs */

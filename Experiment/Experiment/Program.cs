@@ -105,10 +105,52 @@ namespace Experiment
             //Point p = ImageHelper.FindMotionMaxLL3("1.jpg", "2.jpg", 8);
             //Point p2 = ImageHelper.FindMotionMaxLL3("2.jpg", "3.jpg", 8);
 
+            /*
+             
+                Bias 1: 10.805304
+                Bias 2: -10.685230
+                Bias 3: -12.869040
+                Bias 4: -9.290747
+                Bias 5: -13.650532
+                Input 1: Hidden 1: Weight: 7.593340
+                Input 1: Hidden 2: Weight: 9.099361
+                Input 1: Hidden 3: Weight: -0.767637
+                Input 1: Hidden 4: Weight: 7.647061
+                Input 1: Hidden 5: Weight: 0.226191
+                Input 2: Hidden 1: Weight: -9.201358
+                Input 2: Hidden 2: Weight: -7.256593
+                Input 2: Hidden 3: Weight: 2.103945
+                Input 2: Hidden 4: Weight: -6.489161
+                Input 2: Hidden 5: Weight: 1.530591
+                Bias 1: 5.992307
+                Output 1: Hidden 1: Weight: -5.995591
+                Output 1: Hidden 2: Weight: 0.000000
+                Output 1: Hidden 3: Weight: 3.917894
+                Output 1: Hidden 4: Weight: 0.000000
+                Output 1: Hidden 5: Weight: 2.443218
+
+             */
             
-            string val = "1:1:0.5 [0.975] 2:1:2.2 [0.765] 3:1";
-            Network<bool[]> network = Network<bool[]>.Create(val, 3, (idx, signal) => signal[idx] ? 1 : 0);
-            double[] output = network.Update(new bool[] {true, false});
+            string val = @" 1:1 [7.593340]  2:1:10.805304   [-5.995591]     3:1:5.992307
+                            1:1 [9.099361]  2:2:-10.685230  [3.917894]      3:1
+                            1:1 [-0.767637] 2:3:-12.869040  [2.443218]      3:1
+                            1:1 [7.647061]  2:4:-9.290747   [2.086226]      3:1
+                            1:1 [0.226191]  2:5:-13.650532  [2.371310]      3:1
+                            1:2 [-9.201358] 2:1
+                            1:2 [-7.256593] 2:2
+                            1:2 [2.103945]  2:3
+                            1:2 [-6.489161] 2:4
+                            1:2 [1.530591]  2:5";
+            Network<bool[]> xor = Network<bool[]>.Create(val, 3, (idx, signal) => signal[idx] ? 1 : 0);
+            double[] output = xor.Update(new bool[] {true, true});
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}",xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            output = xor.Update(new bool[] { true, false });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            output = xor.Update(new bool[] { false, false });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            output = xor.Update(new bool[] { false, true });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            Console.Read();
         }
 
         static void printf(string value)

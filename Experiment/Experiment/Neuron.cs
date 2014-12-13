@@ -50,5 +50,10 @@ namespace Experiment
 
         public double Value { get; set; }
         public double Bias { get; set; }
+
+        public override string ToString()
+        {
+            return string.Format("{0}, {1}, {2}, {3}", Name, Bias, Value, Axons.Count());
+        }
     }
 }

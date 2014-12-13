@@ -1,15 +1,16 @@
-﻿Build started 12/12/2014 10:34:06 AM.
-     1>Project "C:\Users\bblondin\Documents\Code\CTS\Experiment\NN\NN\NN.vcxproj" on node 2 (Build target(s)).
+﻿Build started 12/12/2014 7:06:35 PM.
+     1>Project "E:\Code\CTS\Experiment\NN\NN\NN.vcxproj" on node 3 (Rebuild target(s)).
+       Project file contains ToolsVersion="12.0". This toolset may be unknown or missing, in which case you may be able to resolve this by installing the appropriate version of MSBuild, or the build may have been forced to a particular ToolsVersion for policy reasons. Treating the project as if it had ToolsVersion="4.0". For more information, please see http://go.microsoft.com/fwlink/?LinkId=291333.
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt nn.cpp
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TP /analyze- /errorReport:prompt nn.cpp
          nn.cpp
-     1>c:\users\bblondin\documents\code\cts\experiment\nn\nn\nn.cpp(85): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
-     1>c:\users\bblondin\documents\code\cts\experiment\nn\nn\nn.cpp(172): warning C4129: 'N' : unrecognized character escape sequence
+     1>e:\code\cts\experiment\nn\nn\nn.cpp(89): warning C4244: '=' : conversion from 'double' to 'int', possible loss of data
+     1>e:\code\cts\experiment\nn\nn\nn.cpp(176): warning C4129: 'N' : unrecognized character escape sequence
        Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\bblondin\Documents\Code\CTS\Experiment\Debug\NN.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\bblondin\Documents\Code\CTS\Experiment\Debug\NN.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\bblondin\Documents\Code\CTS\Experiment\Debug\NN.lib" /MACHINE:X86 Debug\nn.obj
-         NN.vcxproj -> C:\Users\bblondin\Documents\Code\CTS\Experiment\Debug\NN.exe
-     1>Done Building Project "C:\Users\bblondin\Documents\Code\CTS\Experiment\NN\NN\NN.vcxproj" (Build target(s)).
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"E:\Code\CTS\Experiment\Debug\NN.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"E:\Code\CTS\Experiment\Debug\NN.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"E:\Code\CTS\Experiment\Debug\NN.lib" /MACHINE:X86 Debug\nn.obj
+         NN.vcxproj -> E:\Code\CTS\Experiment\Debug\NN.exe
+     1>Done Building Project "E:\Code\CTS\Experiment\NN\NN\NN.vcxproj" (Rebuild target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:00.70
+Time Elapsed 00:00:01.24

@@ -23,7 +23,7 @@ namespace Experiment
         {
             Dictionary<string, Neuron> neurons = new Dictionary<string, Neuron>();
 
-            string pat = @"(?=((?<connection>(?<source>\d:\d(:(?<sourceBias>[\d\.]*))*)\s*\[(?<weight>[\d\.]*)\]\s*(?<dest>\d:\d(:(?<destBias>[\d\.]*))*))))";
+            string pat = @"(?=((?<connection>(?<source>\d:\d(:(?<sourceBias>[-\d\.]*))*)\s*\[(?<weight>[-\d\.]*)\]\s*(?<dest>\d:\d(:(?<destBias>[-\d\.]*))*))))";
             Regex r = new Regex(pat);
             Match m = r.Match(networkMap);
             while (m.Success)
@@ -31,6 +31,17 @@ namespace Experiment
                 string source = m.Groups["source"].Value;
                 string dest = m.Groups["dest"].Value;
                 string weight = m.Groups["weight"].Value;
+                double sourceBias = 0, destBias = 0;
+                if (!string.IsNullOrEmpty(m.Groups["sourceBias"].Value))
+                {
+                    sourceBias = double.Parse(m.Groups["sourceBias"].Value);
+                    source = source.Replace(":" + m.Groups["sourceBias"].Value, "");
+                }
+                if (!string.IsNullOrEmpty(m.Groups["destBias"].Value))
+                {
+                    destBias = double.Parse(m.Groups["destBias"].Value);
+                    dest = dest.Replace(":" + m.Groups["destBias"].Value, "");
+                }
 
                 Neuron sourceN = null, destN = null;
 
@@ -44,10 +55,7 @@ namespace Experiment
                     {
                         sourceN = new Neuron(source);
                     }
-                    if (!string.IsNullOrEmpty(m.Groups["sourceBias"].Value))
-                    {
-                        sourceN.Bias = double.Parse(m.Groups["sourceBias"].Value);
-                    }
+                    sourceN.Bias = sourceBias;
                     neurons.Add(source, sourceN);
                 }
 
@@ -61,10 +69,8 @@ namespace Experiment
                     {
                         destN = new Neuron(dest);
                     }
-                    if (!string.IsNullOrEmpty(m.Groups["destBias"].Value))
-                    {
-                        destN.Bias = double.Parse(m.Groups["destBias"].Value);
-                    }
+
+                    destN.Bias = destBias;
                     neurons.Add(dest, destN);
                 }
 
@@ -75,17 +81,18 @@ namespace Experiment
                 m = m.NextMatch();
             }
 
-            return new Network<T>(inputTransform, neurons.Values.Where(n => n is Input).ToArray());
+            return new Network<T>(inputTransform, neurons.Values.Where(n => n is Input).ToArray()) { _maxDepth = maxDepth };
         }
 
         private Neuron[] _inputs;
         private Neuron[] _outputs;
         private Func<int, T, double> _inputTransform;
+        private int _maxDepth;
         public Network(Func<int, T, double> inputTransform, params Neuron[] inputs)
         {
             _inputs = inputs;
             var outputs = new List<Neuron>();
-            Traverse((n) => true, (n) =>  n is Output, outputs.Add);
+            Traverse((n, level) => true, (n, level) =>  n is Output, outputs.Add);
             _outputs = outputs.ToArray();
             _inputTransform = inputTransform;
         }
@@ -101,38 +108,48 @@ namespace Experiment
         {
             double[] outputs = new double[_outputs.Length];
             for (int i = 0; i < _outputs.Length; i++)
+            {
+                Output n = _outputs[i] as Output;
+                n.Value = 0;
+                foreach (var input in n.Dendrites)
+                {
+                    input.Receiver.Value += input.Signaler.Activation() * input.Weight;
+                }
+
                 outputs[i] = _outputs[i].Activation();
+            }
             return outputs;
         }
 
         private void Propagate()
         {
-            Traverse((n) => true, (n) => !(n is Input), (n) =>
+            Traverse((n, level) => level < _maxDepth, (n, level) => !(n is Input), (n) =>
             {
                 n.Value = 0;
                 foreach (var input in n.Dendrites)
                 {
-                    input.Receiver.Value += input.Signaler.Activation();
+                    input.Receiver.Value += input.Signaler.Activation() * input.Weight;
                 }
             }, true);
         }
 
-        private void Traverse(Func<Neuron, bool> traversalSelector, Func<Neuron, bool> actionSelector, Action<Neuron> action, bool allowMultipleVisits = false)
+        private void Traverse(Func<Neuron, int, bool> traversalSelector, Func<Neuron, int, bool> actionSelector, Action<Neuron> action, bool allowMultipleVisits = false)
         {
             _visited.Clear();
+            int level = 1;
             foreach (var n in _inputs)
             {
-                if (traversalSelector(n))
-                    TraverseRecurse(n, traversalSelector, actionSelector, action, allowMultipleVisits);
+                if (traversalSelector(n, level))
+                    TraverseRecurse(n, traversalSelector, actionSelector, action, allowMultipleVisits, ref level);
             }
         }
 
         private HashSet<Neuron> _visited = new HashSet<Neuron>();
-        private void TraverseRecurse(Neuron n, Func<Neuron, bool> traversalSelector, Func<Neuron, bool> actionSelector, Action<Neuron> action, bool allowMultipleVisits)
+        private void TraverseRecurse(Neuron n, Func<Neuron, int, bool> traversalSelector, Func<Neuron, int, bool> actionSelector, Action<Neuron> action, bool allowMultipleVisits, ref int level)
         {
             if (allowMultipleVisits || !_visited.Contains(n))
             {
-                if (actionSelector(n))
+                if (actionSelector(n, level))
                 {
                     action(n);
                 }
@@ -141,17 +158,19 @@ namespace Experiment
 
             foreach (var nn in n.Axons)
             {
-                if (traversalSelector(nn.Receiver))
+                level++;
+                if (traversalSelector(nn.Receiver, level))
                 {
-                    TraverseRecurse(nn.Receiver, traversalSelector, actionSelector, action, allowMultipleVisits);
+                    TraverseRecurse(nn.Receiver, traversalSelector, actionSelector, action, allowMultipleVisits, ref level);
                 }
+                level--;
             }
         }
 
         protected void SetInputs(T inputSignal)
         {
             _inputIndex = 0;
-            Traverse((n) => n is Input, (n) => true, (n) => SetInputs(n, inputSignal), false);
+            Traverse((n, level) => n is Input, (n, level) => true, (n) => SetInputs(n, inputSignal), false);
         }
 
         private int _inputIndex = 0;
