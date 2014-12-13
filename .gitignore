@@ -1,3 +1,16 @@
+#Visual Studio/c
+*.pdb
+*.suo
+*.tlog
+*.log
+*.lastbuildstate
+*.idb
+*.opensdf
+Debug/
+obj/
+bin/
+Release/
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
