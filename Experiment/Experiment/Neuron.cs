@@ -9,7 +9,14 @@ namespace Experiment
     public class Neuron
     {
         private static int _index = 0;
-        public Neuron(string name = null, Func<double> activationFunction = null, IEnumerable<Neuron> inputs = null, IEnumerable<Neuron> outputs = null)
+        protected string _id = Guid.NewGuid().ToString();
+
+        public Neuron(string name = null, 
+            Func<double> activationFunction = null, 
+            Func<double> deltaFunction = null, 
+            Func<double> sumFunction = null, 
+            IEnumerable<Neuron> inputs = null, 
+            IEnumerable<Neuron> outputs = null)
         {
             Axons = new List<Synapse>();
             Dendrites = new List<Synapse>();
@@ -18,11 +25,38 @@ namespace Experiment
             {
                 activationFunction = () =>
                 {
-                    return 1.0/(1.0 + Math.Exp(-(this.Value + this.Bias))); // sigmoid activation function
+                    LastActivation = 1.0/(1.0 + Math.Exp(-(this.Value + this.Bias))); // sigmoid activation function
+                    return LastActivation;
                 }; 
             }
 
+            if (sumFunction == null)
+            {
+                sumFunction = () =>
+                {
+                    double sum = 0;
+                    foreach (var n in this.Axons)
+                    {
+                        sum += n.Receiver.Delta() * n.Weight;
+                    }
+                    return sum;
+                };
+            }
+
+            if (deltaFunction == null)
+            {
+                deltaFunction = () =>
+                {
+                    double value = this.LastActivation;
+                    LastDelta = Sum() * value * (1 - value);
+                    return LastDelta;
+                };
+            }
+
             Activation = activationFunction;
+            Delta = deltaFunction;
+            Sum = sumFunction;
+
             if (inputs != null)
             {
                 foreach (var n in inputs)
@@ -47,7 +81,11 @@ namespace Experiment
         public IList<Synapse> Axons { get; set; }
         public IList<Synapse> Dendrites { get; set; }
         public Func<double> Activation { get; set; }
+        public Func<double> Delta { get; set; }
+        public Func<double> Sum { get; set; }
 
+        public double LastActivation { get; protected set; }
+        public double LastDelta { get; protected set; }
         public double Value { get; set; }
         public double Bias { get; set; }
 

@@ -16,5 +16,10 @@ namespace Experiment
         public Neuron Signaler { get; private set; }
         public Neuron Receiver { get; private set; }
         public double Weight { get; set; }
+
+        public override string ToString()
+        {
+            return string.Format("{0} <-[{2}]-> {1}", Signaler.Name, Receiver.Name, Weight.ToString("#0.0####"));
+        }
     }
 }

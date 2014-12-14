@@ -131,25 +131,69 @@ namespace Experiment
 
              */
             
-            string val = @" 1:1 [7.593340]  2:1:10.805304   [-5.995591]     3:1:5.992307
-                            1:1 [9.099361]  2:2:-10.685230  [3.917894]      3:1
-                            1:1 [-0.767637] 2:3:-12.869040  [2.443218]      3:1
-                            1:1 [7.647061]  2:4:-9.290747   [2.086226]      3:1
-                            1:1 [0.226191]  2:5:-13.650532  [2.371310]      3:1
-                            1:2 [-9.201358] 2:1
-                            1:2 [-7.256593] 2:2
-                            1:2 [2.103945]  2:3
-                            1:2 [-6.489161] 2:4
-                            1:2 [1.530591]  2:5";
-            Network<bool[]> xor = Network<bool[]>.Create(val, 3, (idx, signal) => signal[idx] ? 1 : 0);
-            double[] output = xor.Update(new bool[] {true, true});
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}",xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+//            string valT = @"    1:1:0.0	[7.59334]	2:1:10.8053	    [-5.995591]	    3:1:5.992307
+//                                1:1		[9.099361]	2:2:-10.68523	[3.917894]	    3:1
+//                                1:1		[-0.767637]	2:3:-12.86904	[2.443218]	    3:1
+//                                1:1		[7.647061]	2:4:-9.290747	[2.086226]	    3:1
+//                                1:1		[0.226191]	2:5:-13.65053	[2.37131]	    3:1
+//                                1:2:0.0	[-9.201358]	2:1
+//                                1:2		[-7.256593]	2:2
+//                                1:2		[2.103945]	2:3
+//                                1:2		[-6.489161]	2:4
+//                                1:2		[1.530591]	2:5";
+
+            //Network<bool> xor = Network<bool>.Create(valT, 3, (idx, signal) => signal[idx] ? 1 : 0);
+            //double[] output = xor.Update(new bool[] {true, true});
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new bool[] { true, false });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new bool[] { false, false });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new bool[] { false, true });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //Console.WriteLine();
+
+//            string valT = @"    1:1:0.0	[0]	2:1:0.0	[0]	    3:1:0.0 [0] 4:1:0.0
+//                                1:1		[0]	2:2:0.0	[0]	    3:1
+//                                1:2:0.0	[0]	2:2     [0]     3:2:0.0 [0] 4:1
+//                                1:2		[0]	2:3:0.0 [0]     3:2";
+
+            string valT = @"    1:1:0.0 	[0]     2:1:0.0    [0]      3:1:0.0
+                                1:1         [0]     2:2:0.0    [0]      3:1
+                                1:2:0.0 	[0]     2:1
+                                1:2         [0]     2:2
+                                1:2         [0]     2:3:0.0    [0]      3:1";
+
+            double[] output;
+            Network<bool> xor = Network<bool>.Create(valT, 3, (idx, signal) => signal[idx] ? 1 : 0);
+
+            Console.WriteLine("New Training");
+            xor.Train(
+                new bool[][] 
+                {
+                    new bool[] { true, true }, 
+                    new bool[] { true, false },
+                    new bool[] { false, false },
+                    new bool[] { false, true }
+                }, 
+                new double[][] 
+                {
+                    new double[]{ 0.0 }, 
+                    new double[]{ 1.0 }, 
+                    new double[]{ 0.0 }, 
+                    new double[]{ 1.0 }
+                }, true, 0.05, 0.6, 0.2, 100000, 0.000005);
+            string xorStr = xor.ToString();
+            Console.WriteLine(xorStr);
+            output = xor.Update(new bool[] { true, true });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
             output = xor.Update(new bool[] { true, false });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
             output = xor.Update(new bool[] { false, false });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
             output = xor.Update(new bool[] { false, true });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+
             Console.Read();
         }
 
