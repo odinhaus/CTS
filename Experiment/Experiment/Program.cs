@@ -130,7 +130,7 @@ namespace Experiment
                 Output 1: Hidden 5: Weight: 2.443218
 
              */
-            
+
 //            string valT = @"    1:1:0.0	[7.59334]	2:1:10.8053	    [-5.995591]	    3:1:5.992307
 //                                1:1		[9.099361]	2:2:-10.68523	[3.917894]	    3:1
 //                                1:1		[-0.767637]	2:3:-12.86904	[2.443218]	    3:1
@@ -141,6 +141,24 @@ namespace Experiment
 //                                1:2		[2.103945]	2:3
 //                                1:2		[-6.489161]	2:4
 //                                1:2		[1.530591]	2:5";
+
+            string valT = @"    1:1:0.0	[0]	2:1:0.0	[0]	    3:1:0.0 [0] 4:1:0.0
+                                1:1		[0]	2:2:0.0	[0]	    3:1
+                                1:1		[0]	2:3:0.0	[0]	    3:1
+                                1:1		[0]	2:4:0.0	[0]	    3:2:0.0
+                                1:1		[0]	2:5:0.0	[0]	    3:2
+                                 			2:6:0.0	[0]	    3:2
+                                 			2:7:0.0	[0]	    3:3:0.0 [0] 4:1
+                                 			2:8:0.0	[0]	    3:3
+                                 			2:9:0.0	[0]	    3:3
+                                 			2:10:0.0	[0]	    3:3
+                                1:2		[0]	2:5                                 
+                                1:2		[0]	2:6 
+                                1:2		[0]	2:7 
+                                1:2		[0]	2:8 
+                                1:2		[0]	2:9 
+                                1:2		[0]	2:10";
+
 
             //Network<bool> xor = Network<bool>.Create(valT, 3, (idx, signal) => signal[idx] ? 1 : 0);
             //double[] output = xor.Update(new bool[] {true, true});
@@ -158,40 +176,50 @@ namespace Experiment
 //                                1:2:0.0	[0]	2:2     [0]     3:2:0.0 [0] 4:1
 //                                1:2		[0]	2:3:0.0 [0]     3:2";
 
-            string valT = @"    1:1:0.0 	[0]     2:1:0.0    [0]      3:1:0.0
-                                1:1         [0]     2:2:0.0    [0]      3:1
-                                1:2:0.0 	[0]     2:1
-                                1:2         [0]     2:2
-                                1:2         [0]     2:3:0.0    [0]      3:1";
+//            string valT = @"    1:1:0.0 	[0]     2:1:0.0    [0]      3:1:0.0
+//                                1:1         [0]     2:2:0.0    [0]      3:1
+//                                1:2:0.0 	[0]     2:1
+//                                1:2         [0]     2:2
+//                                1:2         [0]     2:3:0.0    [0]      3:1";
 
             double[] output;
-            Network<bool> xor = Network<bool>.Create(valT, 3, (idx, signal) => signal[idx] ? 1 : 0);
+            //Network<float> xor = Network<float>.Create(valT, 4, (idx, signal) => signal[idx]);
+            Network<float> xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+
+            output = xor.Update(new float[] { 1f, 2f });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            output = xor.Update(new float[] { 2f, 200f });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            output = xor.Update(new float[] { 1f, 7f });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            output = xor.Update(new float[] { 208f, 1000f });
+            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
 
             Console.WriteLine("New Training");
             xor.Train(
-                new bool[][] 
+                new float[][] 
                 {
-                    new bool[] { true, true }, 
-                    new bool[] { true, false },
-                    new bool[] { false, false },
-                    new bool[] { false, true }
+                    new float[] { 1f, 2f }, 
+                    new float[] { 2f, 200f },
+                    new float[] { 1f, 7f },
+                    new float[] { 208f, 1000f }
                 }, 
                 new double[][] 
                 {
-                    new double[]{ 0.0 }, 
-                    new double[]{ 1.0 }, 
-                    new double[]{ 0.0 }, 
-                    new double[]{ 1.0 }
-                }, true, 0.05, 0.6, 0.2, 100000, 0.000005);
+                    new double[]{ 3f }, 
+                    new double[]{ 202f }, 
+                    new double[]{ 8f }, 
+                    new double[]{ 1208f }
+                }, false, 0.0000005, 0.9, 0.2, 100000000, 0.00000000000005);
             string xorStr = xor.ToString();
             Console.WriteLine(xorStr);
-            output = xor.Update(new bool[] { true, true });
+            output = xor.Update(new float[] { 1f, 2f });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new bool[] { true, false });
+            output = xor.Update(new float[] { 2f, 200f });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new bool[] { false, false });
+            output = xor.Update(new float[] { 1f, 7f });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new bool[] { false, true });
+            output = xor.Update(new float[] { 208f, 1000f });
             Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
 
             Console.Read();

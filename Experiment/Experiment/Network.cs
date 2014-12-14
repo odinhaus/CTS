@@ -9,6 +9,77 @@ namespace Experiment
 {
     public class Network<T>
     {
+        public static Network<T> Create(int[] topology, Func<int, T[], double> inputTransform, double bias0 = 0, double weight0 = 1 )
+        {
+            int maxDepth = topology.Length;
+            if (maxDepth < 2) throw new ArgumentException("Depth must be at least two levels");
+
+            Dictionary<int, HashSet<Neuron>> neurons = new Dictionary<int, HashSet<Neuron>>();
+            HashSet<Input> inputs = new HashSet<Input>();
+
+            for (int l = 0; l < maxDepth; l++)
+            {
+                HashSet<Neuron> nls;
+                if (!neurons.TryGetValue(l, out nls))
+                {
+                    nls = new HashSet<Neuron>();
+                    neurons.Add(l, nls);
+                }
+                if (l == 0)
+                {
+                    for (int i = 0; i < topology[l]; i++)
+                    {
+                        Input input = new Input(string.Format("{0}:{1}", l + 1, i + 1))
+                        {
+                            Bias = bias0
+                        };
+                        nls.Add(input);
+                        inputs.Add(input);
+                    }
+                }
+                else if (l == maxDepth - 1)
+                {
+                    for (int i = 0; i < topology[l]; i++)
+                    {
+                        Output output = new Output(string.Format("{0}:{1}", l+1, i+1))
+                        {
+                            Bias = bias0
+                        };
+                        nls.Add(output);
+                        HashSet<Neuron> prev = neurons[l - 1];
+                        foreach (var pn in prev)
+                        {
+                            Synapse s = new Synapse(pn, output);
+                            s.Weight = weight0;
+                            pn.Axons.Add(s);
+                            output.Dendrites.Add(s);
+                        }
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < topology[l]; i++)
+                    {
+                        Neuron neuron = new Neuron(string.Format("{0}:{1}", l+1, i+1))
+                        {
+                            Bias = bias0
+                        };
+                        nls.Add(neuron);
+                        HashSet<Neuron> prev = neurons[l - 1];
+                        foreach (var pn in prev)
+                        {
+                            Synapse s = new Synapse(pn, neuron);
+                            s.Weight = weight0;
+                            pn.Axons.Add(s);
+                            neuron.Dendrites.Add(s);
+                        }
+                    }
+                }
+            }
+
+            return new Network<T>(inputTransform, inputs.ToArray()) { _maxDepth = maxDepth };
+        }
+
         /// <summary>
         /// Create a network from a string which describes the neurons, connections and weights
         /// </summary>
@@ -223,14 +294,13 @@ namespace Experiment
         {
             if (!inputSignalsSet.Length.Equals(targetsSet.Length)) throw new ArgumentException("Input signal set and target output set must be the same length.");
 
-            Dictionary<object, double> deltas = new Dictionary<object, double>();
-
             if (errorFunction == null)
             {
                 errorFunction = (output, target) =>
                 {
                     double delta = target - output;
-                    return 0.5 * delta * delta;
+                    double error = 0.5 * delta * delta;
+                    return error;
                 };
             }
 
@@ -239,13 +309,14 @@ namespace Experiment
             if (reTrain)
                 InitializeWeightsAndDeltas(w0);
 
-            double error = 0;
+            Dictionary<object, double> deltas = new Dictionary<object, double>();
             for (int epoch = 0; epoch < epochMax; epoch++)
             {
                 T[][] inputSignalsSetR;
                 double[][] targetsSetR;
-
+                double error = 0;
                 Randomize(inputSignalsSet, targetsSet, out inputSignalsSetR, out targetsSetR);
+                
 
                 for (int p = 0; p < inputSignalCount; p++)
                 {
@@ -257,7 +328,8 @@ namespace Experiment
                     for (int o = 0; o < outputs.Length; o++)
                     {
                         ((Output)_outputs[o]).Target = targets[o];
-                        error += errorFunction(outputs[o], targets[o]);
+                        double dErr = errorFunction(outputs[o], targets[o]);
+                        error += dErr;
                     }
 
                     for (int i = 0; i < _inputs.Length; i++)
@@ -293,7 +365,7 @@ namespace Experiment
                     }, true);
                 }
                 if (error <= errorMin) return;
-                if (epoch % 100 == 0) Console.WriteLine("epoch: {0}; error: {1}", epoch, error);
+                if (epoch % 10000 == 0) Console.WriteLine("epoch: {0}; error: {1}", epoch, error);
                 error = 0;
             }
         }

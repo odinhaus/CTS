@@ -47,9 +47,8 @@ namespace Experiment
             {
                 deltaFunction = () =>
                 {
-                    double value = this.LastActivation;
-                    LastDelta = Sum() * value * (1 - value);
-                    return LastDelta;
+                    this.LastDelta=  Sum() * this.LastActivation * (1 - this.LastActivation);
+                    return this.LastDelta;
                 };
             }
 
