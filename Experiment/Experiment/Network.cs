@@ -168,6 +168,9 @@ namespace Experiment
             _inputTransform = inputTransform;
         }
 
+        public Neuron[] Inputs { get { return _inputs; } }
+        public double[] Outputs { get; set; }
+
         public double[] Update(T[] inputSignal)
         {
             SetInputs(inputSignal);
@@ -310,6 +313,11 @@ namespace Experiment
                 InitializeWeightsAndDeltas(w0);
 
             Dictionary<object, double> deltas = new Dictionary<object, double>();
+            double perror = 0;
+            double derror = 0;
+            double pderror = 0;
+            double d2error = 0;
+
             for (int epoch = 0; epoch < epochMax; epoch++)
             {
                 T[][] inputSignalsSetR;
@@ -365,7 +373,15 @@ namespace Experiment
                     }, true);
                 }
                 if (error <= errorMin) return;
-                if (epoch % 10000 == 0) Console.WriteLine("epoch: {0}; error: {1}", epoch, error);
+                if (epoch % 10000 == 0) Console.WriteLine("epoch: {0}; error: {1}; derror: {2}, d2error: {3}", epoch, error, derror, d2error);
+
+                if (epoch > 0) derror = error - perror;
+                if (epoch > 1)
+                {
+                    d2error = derror - pderror;
+                }
+                pderror = derror;
+                perror = error;
                 error = 0;
             }
         }
@@ -401,8 +417,154 @@ namespace Experiment
             targetsR = randT.ToArray();
         }
 
-        public Neuron[] Inputs { get { return _inputs; } }
-        public double[] Outputs { get; set; }
+        /// <summary>
+        /// Uses hybrid Evolutionary Algorithm for determining optimized network topology and parameters
+        /// </summary>
+        /// <param name="signals">training input signals</param>
+        /// <param name="targets">training expected outputs</param>
+        /// <param name="epochs">maximum number of evolutions to execute</param>
+        /// <param name="S">Maximum consecutive generations allowable for GL >= 0</param>
+        /// <param name="Ps">Structural mutation probability - determines liklihood of changing network topology</param>
+        /// <param name="Pw">Weight mutation probability - determines whether network weights will be mutated with random Gaussian noise of step size SS</param>
+        /// <param name="SS">Step size of weight mutation</param>
+        /// <param name="Pgs">Global structural mutation probability - applies to entire population</param>
+        /// <param name="Pgw">Global weight mutation probability - applies to entire population</param>
+        /// <param name="SSg">Global step size of weight mutation - applies to entire population</param>
+        /// <param name="Pls">Local structural mutation probability - applies to individual</param>
+        /// <param name="Plw">Local weight mutation probability - applies to individual</param>
+        /// <param name="SSl">Local step size of weight mutation - applies to individual</param>
+        /// <param name="tPgs">Temporary global structural mutation probability - determines decay rate of Pgs</param>
+        /// <param name="tPgw">Temporary global weight mutation probability - determines decay rate of Pgw</param>
+        /// <param name="tSSg">Temporary global step size of weight mutation probability - determines decay rate of SSg</param>
+        /// <param name="bPls">Base local structural mutation probability - determines max value of Pls</param>
+        /// <param name="bPlw">Base local weight mutation probability - determines max value of Plw</param>
+        /// <param name="bSSl">Base local step size of weight mutation probability - determines max value of SSl</param>
+        public virtual void Evolve(
+            T[][] signals, 
+            double[][] targets,
+            int epochs = 100000,
+            double S = 10,
+            double tPgs = 0.015,
+            double tPgw = 0.015,
+            double tSSg = 1.0,
+            double bPls = 1,
+            double bPlw = 1,
+            double bSSl = 1)
+        {
+            Func<double>
+                Ebest = () => 0,
+                Eopt = () => 0;
+            Func<double> s = () => epochs;
+            Func<double> Fbest = () => 0;
+            Func<Network<T>, double> F = (n) => 0;
+            Func<int, double> Pgs = (t) => tPgs * s()/S;    // (1)
+            Func<int, double> Pgw = (t) => tPgw * s()/S;    // (2)
+            Func<int, double> SSg = (t) => tSSg * s()/S;    // (3)
+            Func<Network<T>, double> Pls = (n) => bPls*(1 - Fbest()/F(n)); // (4)
+            Func<Network<T>, double> Plw = (n) => bPlw*(1 - Fbest()/F(n)); // (5)
+            Func<Network<T>, double> SSl = (n) => bSSl*(1 - Fbest()/F(n)); // (6)
+            Func<Network<T>, int, double> Ps = (n, t) => Pgs(t) + Pls(n); // (7)
+            Func<Network<T>, int, double> Pw = (n, t) => Pgw(t) + Plw(n); // (8)
+            Func<Network<T>, int, double> SS = (n, t) => SSg(t) + SSl(n); // (9)
+
+
+
+            Func<Func<double>, Func<double>, double> GL = (eb, eo) => ((eb() + 1)/(eo() + 1)) - 1;
+
+            /*
+             * FORMULAE
+             * 
+             * (1)  Pgs(t) = tmpPgs ∗ s(t) / S
+             * (2)  Pgw(t) = tmpPgw ∗ s(t) / S
+             * (3)  SSg(t) = tmpSSg ∗ s(t) / S
+             * (4)  Pls(n) = basePls ∗ [1 − Fbest/F(n)]
+             * (5)  Plw(n) = basePlw ∗ [1 − Fbest/F(n)]
+             * (6)  SSl(n) = baseSSl ∗ [1 − Fbest/F(n)]
+             * (7)  Ps(n,t) = Pgs(t) + Pls(n)
+             * (8)  Pw(n,t) = Pgw(t) + Plw(n)
+             * (9)  SS(n,t) = SSg(t) + SSl(n)
+             * (10) wij = w'ij + N(0,(SSl + SSg))
+             * 
+             * ALGORITHM
+             * 1)   Generate an initial population of μ ANNs with
+                    random hidden nodes and random connections. Assign the
+                    initial weights including the network bias with uniform random
+                    values between −1 and 1. Initialize S, basePls, basePlw,
+                    baseSSl, tmpPgs, tmpPgw, and tmpSSg.
+             * 2)   Calculate the local structural mutation probability
+                    (Pls), local weight mutation probability (Plw), and local step
+                    size of weight perturbation (SSl) of each individual network
+                    in the population according to (4)–(6), respectively. Pls, Plw,
+                    and SSl are used to determine the severity of the mutation in
+                    a given individual in the population.
+             * 3)   Calculate Pgs(t), Pgw(t), and SSg(t) at generation t
+                    according to (1)–(3), respectively. Pgs(t), Pgw(t), and SSg(t)
+                    are used to guide the entire population’s exploration and
+                    exploitation of the search space. Note that this step is executed
+                    at intervals of generations (10 generations are used in the
+                    current implementation) instead of every generation.
+             * 4)   Perform the structural mutation (adding or deleting
+                    hidden nodes and network connections) and weight mutation
+                    (Gaussian perturbation of weights) on the node vector and
+                    connection weight matrix (Fig. 2) for each individual in the
+                    parent population. Hidden nodes of an ANN are mutated
+                    by bit flipping in the node vector. Connection deletion is
+                    performed by defining the non-zero value in the connection
+                    matrix as zero. Conversely, connection addition is achieved
+                    by initiating a zero value in the connection matrix with
+                    uniform random values between −1 and 1. The probability of
+                    structural mutation is based on (7). Next, the probability that
+                    a non-zero connection weight of a network will be mutated is
+                    based on (8). If successful, this particular connection weight
+                    is mutated by adding a Gaussian perturbation with mean 0
+                    and a step size as described in (9), which is defined as
+                    follows:
+                                wij = w'ij + N(0,(SSl + SSg))                       (10)
+                    where wij and w
+                    ij denote the parent and offspring connection
+                    weight values in the connection matrix. N(0,σ) is the
+                    Gaussian perturbation with mean 0 and standard deviation σ.
+                    In this case, σ = SSl + SSg.
+             * 5)   Evaluate each offspring created after the mutation
+                    according to the classification error in the validation set. If
+                    the best network found in the current generation is better than
+                    the reserved best network (ANNbest) up to this generation,
+                    replace ANNbest with this network and reset the stopping
+                    counter to its initial value, S. Under the same condition, update
+                    the temporary global structural mutation probability (tmpPgs),
+                    temporary global weight mutation probability (tmpPgw), and
+                    temporary global step size of weight perturbation (tmpSSg) to
+                    Pgs(t), Pg(t)w, and SSg(t), respectively. If there is a tie in the
+                    classification error at the validation set when finding ANNbest,
+                    the individual with the lowest classification error at the training
+                    set will be the new ANNbest. If a tie still exists, the individual
+                    with the fewest connections and input nodes will be the new
+                    ANNbest. Decrease the stopping counter by one and do not
+                    update tmpPgs, tmpPgw, and tmpSSg if the classification error
+                    at the validation set of the best network found in the current
+                    generation is equal to or greater than ANNbest.
+             * 6)   Stop the evolutionary process and go to Step 8 if
+                    the stopping counter is decreased to zero or the maximum
+                    number of generations has been reached. Otherwise, proceed
+                    to the next step.
+             * 7)   Sort the offspring according to their fitness values
+                    and use the rank-based selection to choose μ–2 offspring to
+                    become parents for the next generation. Elitism is also used
+                    in HEANN, where one fittest parent and one fittest offspring
+                    from the current generation will be retained for the next
+                    generation. Hence, μ ANNs are selected as parents for the
+                    next generation. Steps 2–7 are repeated until the termination
+                    criterion for stopping the evolutionary process is satisfied.
+             * 8)   The best network in terms of the classification error
+                    in the validation set (ANNbest) is the final ANN for the given
+                    problem. 
+            */
+            while (epochs > 0)
+            {
+
+                epochs--;
+            }
+        }
 
         public override string ToString()
         {
