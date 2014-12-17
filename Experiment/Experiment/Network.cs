@@ -417,21 +417,12 @@ namespace Experiment
             targetsR = randT.ToArray();
         }
 
-        private Random _r = new Random();
-        private double Gaussian(double mean, double stdDev)
-        {
-            return mean 
-                + stdDev 
-                * (Math.Sqrt(-2.0 * Math.Log(_r.NextDouble()))) 
-                * (Math.Sin(2.0 * Math.PI * _r.NextDouble()));
-        }
-
         /// <summary>
         /// Uses hybrid Evolutionary Algorithm for determining optimized network topology and parameters
         /// </summary>
         /// <param name="signals">training input signals</param>
         /// <param name="targets">training expected outputs</param>
-        /// <param name="generations">maximum number of evolutions to execute</param>
+        /// <param name="epochs">maximum number of evolutions to execute</param>
         /// <param name="S">Maximum consecutive generations allowable for GL >= 0</param>
         /// <param name="Ps">Structural mutation probability - determines liklihood of changing network topology</param>
         /// <param name="Pw">Weight mutation probability - determines whether network weights will be mutated with random Gaussian noise of step size SS</param>
@@ -448,31 +439,38 @@ namespace Experiment
         /// <param name="bPls">Base local structural mutation probability - determines max value of Pls</param>
         /// <param name="bPlw">Base local weight mutation probability - determines max value of Plw</param>
         /// <param name="bSSl">Base local step size of weight mutation probability - determines max value of SSl</param>
-        public virtual Network<T> Evolve(
+        public virtual void Evolve(
             T[][] signals, 
             double[][] targets,
-            int maxHiddenNeurons = 50,
-            int populationSize = 100,
-            int generations = 10000,
-            int S = 500,
-            double bPls = 0.2,
-            double bPlw = 0.2,
-            double bSSl = 2,
-            double a1 = 1,
-            double a2 = 0.1,
-            double a3 = 1)
+            int epochs = 100000,
+            double S = 10,
+            double tPgs = 0.015,
+            double tPgw = 0.015,
+            double tSSg = 1.0,
+            double bPls = 1,
+            double bPlw = 1,
+            double bSSl = 1)
         {
-            double tPgs = bPls;
-            double tPgw = bPlw;
-            double tSSg = bSSl;
-            int sCount = S;
-            Func<double> s = () => sCount;
-            Func<double> Pgs = () => tPgs * s()/S;    // (1)
-            Func<double> Pgw = () => tPgw * s()/S;    // (2)
-            Func< double> SSg = () => tSSg * s()/S;    // (3)
-            //Func<Func<double>, Func<double>, double> GL = (eb, eo) => ((eb() + 1)/(eo() + 1)) - 1;
+            Func<double>
+                Ebest = () => 0,
+                Eopt = () => 0;
+            Func<double> s = () => epochs;
+            Func<double> Fbest = () => 0;
+            Func<Network<T>, double> F = (n) => 0;
+            Func<int, double> Pgs = (t) => tPgs * s()/S;    // (1)
+            Func<int, double> Pgw = (t) => tPgw * s()/S;    // (2)
+            Func<int, double> SSg = (t) => tSSg * s()/S;    // (3)
+            Func<Network<T>, double> Pls = (n) => bPls*(1 - Fbest()/F(n)); // (4)
+            Func<Network<T>, double> Plw = (n) => bPlw*(1 - Fbest()/F(n)); // (5)
+            Func<Network<T>, double> SSl = (n) => bSSl*(1 - Fbest()/F(n)); // (6)
+            Func<Network<T>, int, double> Ps = (n, t) => Pgs(t) + Pls(n); // (7)
+            Func<Network<T>, int, double> Pw = (n, t) => Pgw(t) + Plw(n); // (8)
+            Func<Network<T>, int, double> SS = (n, t) => SSg(t) + SSl(n); // (9)
 
-            #region algorithm
+
+
+            Func<Func<double>, Func<double>, double> GL = (eb, eo) => ((eb() + 1)/(eo() + 1)) - 1;
+
             /*
              * FORMULAE
              * 
@@ -561,167 +559,10 @@ namespace Experiment
                     in the validation set (ANNbest) is the final ANN for the given
                     problem. 
             */
-            #endregion
-
-            List<Fitness> networks = CreateNetworks(
-                signals[0].Length, 
-                targets[0].Length, 
-                maxHiddenNeurons,
-                populationSize);
-
-            Fitness best = null;
-            double pgs = 0, pgw = 0, ssg = 0;
-            while (generations > 0 && sCount > 0)
+            while (epochs > 0)
             {
-                if (generations % 10 == 0 || best == null)
-                {
-                    // update global mutation rates every 10 generations
-                    pgs = Pgs();
-                    pgw = Pgw();
-                    ssg = SSg();
-                }
 
-                if (best != null)
-                {
-                    // mutate network, keeping top two parents for next gen
-                    Mutate(networks, 2, pgs, pgw, ssg);
-                }
-
-                // run the networks
-                for (int p = 0; p < targets.Length; p++)
-                {
-                    double[] target = targets[p];
-                    T[] signal = signals[p];
-                    for (int n = 0; n < populationSize; n++)
-                    {
-                        networks[n].Network.Update(signal);
-                        networks[n].Increment(target);
-                    }
-                }
-
-                // order by best fit
-                networks.Sort((f1, f2) =>
-                {
-                    int val = -f1.F.CompareTo(f2.F);
-                    if (val == 0)
-                    {
-                        // fitness function values match, so prefer lesser complexity
-                        val = -f1.Complexity.CompareTo(f2.Complexity);
-                    }
-                    return val;
-                });
-
-                if (best == null || networks[0].F < best.F)
-                {
-                    // new best fit in this generation was found
-                    best = networks[0];
-                    // reset local min escape counter
-                    sCount = S;
-                    // update global mutation rates
-                    tPgs = Pgs();
-                    tPgw = Pgw();
-                    tSSg = SSg();
-                }
-
-                sCount--;
-                generations--;
-            }
-
-            return best.Network;
-        }
-
-        private void Mutate(List<Fitness> networks, int keep, 
-            double Pgs, 
-            double Pgw, 
-            double SSg)
-        {
-            double Fbest = networks[0].F;
-            Func<Fitness, double> Ps = (n) => Pgs + n.Pls(Fbest); // (7)
-            Func<Fitness, double> Pw = (n) => Pgw + n.Plw(Fbest); // (8)
-            Func<Fitness, double> SS = (n) => SSg + n.SSl(Fbest); // (9)
-        }
-
-        private List<Fitness> CreateNetworks(int inputCount, int outputCount, int maxHiddenNeurons, int populationSize)
-        {
-            throw new NotImplementedException();
-        }
-
-        class Fitness
-        {
-            public Fitness(Network<T> network, double a1, double a2,
-                double basePls, double basePlw, double baseSSl)
-            {
-                Network = network;
-                A1 = a1;
-                A2 = a2;
-                BasePls = basePls;
-                BasePlw = basePlw;
-                BaseSSl = baseSSl;
-                Reset();
-            }
-
-            public Network<T> Network { get; private set; }
-
-            public double TrainingError
-            {
-                get { return (100.0/(_patternCount*Network.Outputs.Length))*_sumSqr; }
-            }
-            public double Complexity { get; private set; }
-            public double A1 { get; private set; }
-            public double A2 { get; private set; } 
-            public double BasePls { get; private set; }
-            public double BasePlw { get; private set; }
-            public double BaseSSl { get; private set; }
-  
-
-            public double Pls(double Fbest)
-            {
-                return BasePls*(1 - Fbest/F); // (4)
-            }
-            public double Plw(double Fbest)
-            {
-                return BasePlw * (1 - Fbest / F); // (5)
-            }
-            public double SSl(double Fbest)
-            {
-                return BaseSSl * (1 - Fbest / F); // (6)
-            }
-
-            private bool _updateF = true;
-            private double _f = 0.0;
-            public double F
-            {
-                get
-                {
-                    if (_updateF)
-                    {
-                        _f = A1*TrainingError + A2*Complexity;
-                        _updateF = false;
-                    }
-                    return _f;
-                }
-            }
-
-            private int _patternCount = 0;
-            private double _sumSqr = 0.0;
-            public void Increment(double[] targets)
-            {
-                _updateF = true;
-                double sumSqrT = 0.0;
-                for (int o = 0; o < targets.Length; o++)
-                {
-                    sumSqrT += Math.Pow(targets[o] - Network.Outputs[o], 2);
-                }
-                _sumSqr += sumSqrT;
-                _patternCount++;
-            }
-
-            public void Reset()
-            {
-                Complexity = Math.Log(Network.ConnectionCount);
-                _patternCount = 0;
-                _sumSqr = 0.0;
-                _updateF = true;
+                epochs--;
             }
         }
 
@@ -776,7 +617,5 @@ namespace Experiment
             Traverse(traverse, actionSelect, action, true);
             return sb.ToString();
         }
-
-        public double ConnectionCount { get; set; }
     }
 }
