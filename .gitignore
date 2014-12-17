@@ -184,3 +184,5 @@ UpgradeLog*.htm
 FakesAssemblies/
 *.exe
 *.tlog
+*.suo
+*.sdf

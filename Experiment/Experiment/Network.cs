@@ -431,24 +431,18 @@ namespace Experiment
         /// </summary>
         /// <param name="signals">training input signals</param>
         /// <param name="targets">training expected outputs</param>
+        /// <param name="maxHiddenNeurons">maximum number of interneurons created in evolutionary candidates</param>
+        /// <param name="populationSize">number of networks to create per generation</param>
         /// <param name="generations">maximum number of evolutions to execute</param>
         /// <param name="S">Maximum consecutive generations allowable for GL >= 0</param>
-        /// <param name="Ps">Structural mutation probability - determines liklihood of changing network topology</param>
-        /// <param name="Pw">Weight mutation probability - determines whether network weights will be mutated with random Gaussian noise of step size SS</param>
-        /// <param name="SS">Step size of weight mutation</param>
-        /// <param name="Pgs">Global structural mutation probability - applies to entire population</param>
-        /// <param name="Pgw">Global weight mutation probability - applies to entire population</param>
-        /// <param name="SSg">Global step size of weight mutation - applies to entire population</param>
-        /// <param name="Pls">Local structural mutation probability - applies to individual</param>
-        /// <param name="Plw">Local weight mutation probability - applies to individual</param>
-        /// <param name="SSl">Local step size of weight mutation - applies to individual</param>
-        /// <param name="tPgs">Temporary global structural mutation probability - determines decay rate of Pgs</param>
-        /// <param name="tPgw">Temporary global weight mutation probability - determines decay rate of Pgw</param>
-        /// <param name="tSSg">Temporary global step size of weight mutation probability - determines decay rate of SSg</param>
         /// <param name="bPls">Base local structural mutation probability - determines max value of Pls</param>
         /// <param name="bPlw">Base local weight mutation probability - determines max value of Plw</param>
         /// <param name="bSSl">Base local step size of weight mutation probability - determines max value of SSl</param>
-        public virtual Network<T> Evolve(
+        /// <param name="a1">weight of output fitness in error function</param>
+        /// <param name="a2">weight of network complexity in error function</param>
+        /// <param name="a3"></param>
+        public static Network<T> Create(
+            Func<int, T[], double> inputTransform,
             T[][] signals, 
             double[][] targets,
             int maxHiddenNeurons = 50,
@@ -564,10 +558,12 @@ namespace Experiment
             #endregion
 
             List<Fitness> networks = CreateNetworks(
+                inputTransform,
                 signals[0].Length, 
                 targets[0].Length, 
                 maxHiddenNeurons,
-                populationSize);
+                populationSize,
+                a1, a3, a3, bPls, bPlw, bSSl);
 
             Fitness best = null;
             double pgs = 0, pgw = 0, ssg = 0;
@@ -581,11 +577,8 @@ namespace Experiment
                     ssg = SSg();
                 }
 
-                if (best != null)
-                {
-                    // mutate network, keeping top two parents for next gen
-                    Mutate(networks, 2, pgs, pgw, ssg);
-                }
+                // mutate network, keeping top two parents for next gen
+                Mutate(networks, 2, pgs, pgw, ssg);
 
                 // run the networks
                 for (int p = 0; p < targets.Length; p++)
@@ -598,18 +591,6 @@ namespace Experiment
                         networks[n].Increment(target);
                     }
                 }
-
-                // order by best fit
-                networks.Sort((f1, f2) =>
-                {
-                    int val = -f1.F.CompareTo(f2.F);
-                    if (val == 0)
-                    {
-                        // fitness function values match, so prefer lesser complexity
-                        val = -f1.Complexity.CompareTo(f2.Complexity);
-                    }
-                    return val;
-                });
 
                 if (best == null || networks[0].F < best.F)
                 {
@@ -630,30 +611,84 @@ namespace Experiment
             return best.Network;
         }
 
-        private void Mutate(List<Fitness> networks, int keep, 
+        private static void Mutate(List<Fitness> networks, 
+            int keep, 
             double Pgs, 
             double Pgw, 
             double SSg)
         {
+            // order by best fit
+            networks.Sort((f1, f2) =>
+            {
+                int val = -f1.F.CompareTo(f2.F);
+                if (val == 0)
+                {
+                    // fitness function values match, so prefer lesser complexity
+                    val = -f1.Complexity.CompareTo(f2.Complexity);
+                }
+                return val;
+            });
+
             double Fbest = networks[0].F;
             Func<Fitness, double> Ps = (n) => Pgs + n.Pls(Fbest); // (7)
             Func<Fitness, double> Pw = (n) => Pgw + n.Plw(Fbest); // (8)
             Func<Fitness, double> SS = (n) => SSg + n.SSl(Fbest); // (9)
+            
+            for (int n = 2; n < networks.Count; n++)
+            {
+                networks[n] = Mutate(networks[n], Ps, Pw, SS);
+            }
         }
 
-        private List<Fitness> CreateNetworks(int inputCount, int outputCount, int maxHiddenNeurons, int populationSize)
+        private static Fitness Mutate(Fitness fitness, 
+            Func<Fitness, double> Ps, 
+            Func<Fitness, double> Pw, 
+            Func<Fitness, double> SS)
         {
             throw new NotImplementedException();
         }
 
+        private static List<Fitness> CreateNetworks(
+            Func<int, T[], double> inputTransform, 
+            int inputCount, 
+            int outputCount, 
+            int maxHiddenNeurons, 
+            int populationSize,
+            double a1,
+            double a2,
+            double a3,
+            double basePls,
+            double basePlw,
+            double baseSSl)
+        {
+            List<Fitness> population = new List<Fitness>();
+            for (int n = 0; n < populationSize; n++)
+            {
+                population.Add(
+                    new Fitness(
+                            Network<T>.Create(new int[] { inputCount, maxHiddenNeurons, outputCount},
+                            inputTransform),
+                            a1,
+                            a2,
+                            a3,
+                            basePls,
+                            basePlw,
+                            baseSSl
+                        )
+                    );
+            }
+            return population;
+        }
+
         class Fitness
         {
-            public Fitness(Network<T> network, double a1, double a2,
+            public Fitness(Network<T> network, double a1, double a2, double a3,
                 double basePls, double basePlw, double baseSSl)
             {
                 Network = network;
                 A1 = a1;
                 A2 = a2;
+                A3 = a1;
                 BasePls = basePls;
                 BasePlw = basePlw;
                 BaseSSl = baseSSl;
@@ -668,7 +703,8 @@ namespace Experiment
             }
             public double Complexity { get; private set; }
             public double A1 { get; private set; }
-            public double A2 { get; private set; } 
+            public double A2 { get; private set; }
+            public double A3 { get; private set; }
             public double BasePls { get; private set; }
             public double BasePlw { get; private set; }
             public double BaseSSl { get; private set; }
