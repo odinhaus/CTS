@@ -457,6 +457,25 @@ namespace Experiment
                 * (Math.Sin(2.0 * Math.PI * _r.NextDouble()));
         }
 
+        public static Network<T> Create(
+            Func<int, T[], double> inputTransform,
+            T[][] signals,
+            double[][] targets,
+            int maxHiddenNeurons = 50,
+            int populationSize = 100,
+            double acceptableFitness = 200,
+            int S = 500,
+            double bPls = 0.2,
+            double bPlw = 0.2,
+            double bSSl = 2,
+            double a1 = 1,
+            double a2 = 0.1,
+            double a3 = 1)
+        {
+            return Create(inputTransform, signals, targets, maxHiddenNeurons, populationSize, int.MaxValue,
+                acceptableFitness, S, bPls, bPlw, bSSl, a1, a2, a3);
+        }
+
         /// <summary>
         /// Uses hybrid Evolutionary Algorithm for determining optimized network topology and parameters
         /// </summary>
@@ -465,7 +484,7 @@ namespace Experiment
         /// <param name="maxHiddenNeurons">maximum number of interneurons created in evolutionary candidates</param>
         /// <param name="populationSize">number of networks to create per generation</param>
         /// <param name="generations">maximum number of evolutions to execute</param>
-        /// <param name="S">Maximum consecutive generations allowable for GL >= 0</param>
+        /// <param name="S">Maximum consecutive generations allowable for non-improving evolutions</param>
         /// <param name="bPls">Base local structural mutation probability - determines max value of Pls</param>
         /// <param name="bPlw">Base local weight mutation probability - determines max value of Plw</param>
         /// <param name="bSSl">Base local step size of weight mutation probability - determines max value of SSl</param>
@@ -487,14 +506,36 @@ namespace Experiment
             double a2 = 0.1,
             double a3 = 1)
         {
+            return Create(inputTransform, signals, targets, maxHiddenNeurons, populationSize, generations,
+                double.MaxValue, S, bPls, bPlw, bSSl, a1, a2, a3);
+        }
+
+        private static Network<T> Create(
+            Func<int, T[], double> inputTransform,
+            T[][] signals, 
+            double[][] targets,
+            int maxHiddenNeurons,
+            int populationSize,
+            int generations,
+            double acceptableError,
+            int S,
+            double bPls,
+            double bPlw,
+            double bSSl,
+            double a1,
+            double a2,
+            double a3)
+        {
             double tPgs = bPls;
             double tPgw = bPlw;
             double tSSg = bSSl;
             int sCount = S;
             Func<double> s = () => sCount;
-            Func<double> Pgs = () => tPgs * s()/S;    // (1)
-            Func<double> Pgw = () => tPgw * s()/S;    // (2)
-            Func< double> SSg = () => tSSg * s()/S;    // (3)
+            // (1) only modify structure when weight evolution fails, or we're evolve for a fixed set of iterations
+            //Func<double> Pgs = () => sCount == 1 || double.MaxValue.Equals(acceptableError) ? tPgs * s() / S : 0;    
+            Func<double> Pgs = () =>  tPgs * s() / S;   // (1)
+            Func<double> Pgw = () => tPgw * s() / S;    // (2)
+            Func<double> SSg = () => tSSg * s() / S;    // (3)
             //Func<Func<double>, Func<double>, double> GL = (eb, eo) => ((eb() + 1)/(eo() + 1)) - 1;
 
             #region algorithm
@@ -590,8 +631,8 @@ namespace Experiment
 
             List<Fitness> networks = CreateNetworks(
                 inputTransform,
-                signals[0].Length, 
-                targets[0].Length, 
+                signals[0].Length,
+                targets[0].Length,
                 maxHiddenNeurons,
                 populationSize,
                 a1, a3, a3, bPls, bPlw, bSSl);
@@ -599,19 +640,20 @@ namespace Experiment
             double bestF = double.MaxValue;
             Fitness best = null;
             double pgs = 0, pgw = 0, ssg = 0;
-            while (generations > 0 && sCount > 0)
+            int keep = (int)((double)populationSize * .2);
+            while (generations > 0 && sCount > 0 && bestF > acceptableError)
             {
-                if (generations % 10 == 0 || best == null)
-                {
+                //if (generations % 10 == 0 || best == null)
+                //{
                     // update global mutation rates every 10 generations
                     pgs = Pgs();
                     pgw = Pgw();
                     ssg = SSg();
-                }
+                //}
 
                 // mutate network, keeping top two parents for next gen
                 Fitness thisBest;
-                Mutate(networks, 5, pgs, pgw, ssg, out thisBest);
+                Mutate(networks, keep, pgs, pgw, ssg, out thisBest);
 
                 if (thisBest.F < bestF)
                 {
@@ -626,25 +668,33 @@ namespace Experiment
                     tSSg = SSg();
                 }
                 //else if (thisBest.F > bestF) Debugger.Break();
-                
+
                 // run the networks
-                for (int p = 0; p < targets.Length; p++)
-                {
-                    double[] target = targets[p];
-                    T[] signal = signals[p];
-                    for (int n = 0; n < populationSize; n++)
-                    {
-                        networks[n].Network.Update(signal, 1);
-                        networks[n].Increment(target);
-                    }
-                }
+                ApplySignals(networks, signals, targets);
 
                 sCount--;
                 generations--;
-                if (generations % 10 == 0) Console.WriteLine(string.Format("F: {0}, Best.F: {1}, Complexity: {2}", bestF, best.F, best.Complexity ));
+
+                if (acceptableError < double.MaxValue && sCount == 0) sCount = S;
+
+                if (generations % 10 == 0) Console.WriteLine(string.Format("F: {0}, Best.F: {1}, Complexity: {2}", bestF, best.F, best.Complexity));
             }
 
             return best.Network;
+        }
+
+        private static void ApplySignals(List<Fitness> networks, T[][] signals, double[][] targets)
+        {
+            for (int p = 0; p < targets.Length; p++)
+            {
+                double[] target = targets[p];
+                T[] signal = signals[p];
+                for (int n = 0; n < networks.Count; n++)
+                {
+                    networks[n].Network.Update(signal, 1);
+                    networks[n].Increment(target);
+                }
+            }
         }
 
         private static void Mutate(List<Fitness> networks, 
@@ -681,6 +731,11 @@ namespace Experiment
                 for (int n = keep * 2; n < networks.Count; n++) // leave the top two from previous generation
                 {
                     networks[n] = Mutate(networks[n], Ps, Pw, SS);
+                }
+
+                for (int n = 0; n < keep; n++)
+                {
+                    networks[n] = networks[n].Clone(); // clone keepers
                 }
             }
         }
@@ -738,70 +793,83 @@ namespace Experiment
         {
             Neuron[] neurons = this.Clone().Neurons;
             Func<double, double> adjust = (ss) => Gaussian(0, ss);
-            _cc = -1.0;
-            // do structure changes first
-            for (int n = 0; n < neurons.Length; n++)
-            {
-                Neuron source = neurons[n];
-                if (!(source is Dead) && Pw >= _r.NextDouble())
-                {
-                    source.Bias += adjust(SS);
-                }
-                if (source.GetType().Equals(typeof(Neuron))
-                    && source.Axons.Count == 0
-                    && source.Dendrites.Count == 0)
-                {
-                    source = new Dead(source.Name);
-                    neurons[n] = source;
-                }
+            _cc = -1;
 
-                for (int nn = 0; nn < neurons.Length; nn++)
+            Network<T> child;
+            do
+            {
+                // do structure changes first
+                for (int n = 0; n < neurons.Length; n++)
                 {
-                    Neuron target = neurons[nn];
-                    if (nn == n || target is Input) continue; // neurons can't connect back to inputs
-                    Synapse s = source.Axons.Where(ss => ss.Receiver.Equals(target)).FirstOrDefault();
-                    if (s == null)
+                    Neuron source = neurons[n];
+                    if (!(source is Dead) && Pw > _r.NextDouble())
                     {
-                        if (Ps >= _r.NextDouble()) // check to add a connection
-                        {
-                            // not connected
-                            s = new Synapse(source, target) { Weight = _r.NextDouble() * 2.0 - 1.0 };
-                            source.Axons.Add(s);
-                            target.Dendrites.Add(s);
-                        }
+                        source.Bias += adjust(SS);
                     }
-                    else if (s.Receiver is Dead)
+                    if (source.GetType().Equals(typeof (Neuron))
+                        && source.Axons.Count == 0
+                        && source.Dendrites.Count == 0)
                     {
-                        if (Ps >= _r.NextDouble()) // check to add a connection
-                        {
-                            // make it alive
-                            target.Dendrites.Remove(s);
-                            source.Axons.Remove(s);
-                            target = new Neuron(target.Name);
-                            s = new Synapse(source, target) { Weight = _r.NextDouble() * 2.0 - 1.0 };
-                            source.Axons.Add(s);
-                            target.Dendrites.Add(s);
-                        }
+                        source = new Dead(source.Name);
+                        neurons[n] = source;
                     }
-                    else
+
+                    for (int nn = 0; nn < neurons.Length; nn++)
                     {
-                        if (Ps >= _r.NextDouble()) // check to kill the connetion
+                        double PsR = _r.NextDouble();
+                        double PwR = _r.NextDouble();
+                        Neuron target = neurons[nn];
+                        if (nn == n || target is Input) continue; // neurons can't connect back to inputs
+                        var existing = source.Axons.Where(ss => ss.Receiver.Name.Equals(target.Name)).ToArray();
+                        if (existing.Length == 0)
                         {
-                            // kill it
-                            target.Dendrites.Remove(s);
-                            source.Axons.Remove(s);
+                            if (Ps > PsR) // check to add a connection
+                            {
+                                // not connected
+                                var s = new Synapse(source, target) {Weight = adjust(SS)};
+                                source.Axons.Add(s);
+                                target.Dendrites.Add(s);
+                            }
                         }
-                        else if (Pw >= _r.NextDouble()) // check to modify its weight
+                        else
                         {
-                            s.Weight += adjust(SS);
+                            foreach (var s in existing)
+                            {
+                                if (Ps > PsR) // check to kill the connetion
+                                {
+                                    if (s.Receiver is Dead)
+                                    {
+                                        // make it alive
+                                        target.Dendrites.Remove(s);
+                                        source.Axons.Remove(s);
+                                        target = new Neuron(target.Name);
+                                        var newS = new Synapse(source, target);
+                                        source.Axons.Add(newS);
+                                        target.Dendrites.Add(newS);
+                                    }
+                                    else
+                                    {
+
+                                        // kill it
+                                        target.Dendrites.Remove(s);
+                                        source.Axons.Remove(s);
+                                    }
+                                }
+                                if (Pw > PwR) // check to modify its weight
+                                {
+                                    s.Weight += adjust(SS);
+                                }
+                                PsR = _r.NextDouble();
+                                PwR = _r.NextDouble();
+                            }
                         }
+                        neurons[nn] = target;
                     }
-                    neurons[nn] = target;
                 }
-                
-            }
-            if (neurons.OfType<Output>().Count() == 0) Debugger.Break();
-            Network<T> child = new Network<T>(this._inputTransform, neurons);
+                child = new Network<T>(this._inputTransform, neurons);
+            } while (child.ConnectionCount == 0);
+
+            
             return child;
         }
 
@@ -891,6 +959,7 @@ namespace Experiment
                         _f = A1*TrainingError + A2*Complexity;
                         _updateF = false;
                     }
+                    if (_f < 0) Debugger.Break();
                     return _f;
                 }
             }
@@ -915,6 +984,12 @@ namespace Experiment
                 _patternCount = 0;
                 _sumSqr = 0.0;
                 _updateF = true;
+            }
+
+            public Fitness Clone()
+            {
+                return new Fitness(this.Network.Clone(),
+                    this.A1, this.A2, this.A3, this.BasePls, this.BasePlw, this.BaseSSl);
             }
         }
 
@@ -970,8 +1045,8 @@ namespace Experiment
             return sb.ToString();
         }
 
-        double _cc = -1.0;
-        public double ConnectionCount 
+        int _cc = -1;
+        public int ConnectionCount 
         {
             get
             {
