@@ -179,6 +179,7 @@ namespace Experiment
         public double[] Update(T[] inputSignal, int recursionCount = 1)
         {
             SetInputs(inputSignal);
+            ClearValues();
             Propagate((n) =>
             {
                 n.Value = 0;
@@ -188,6 +189,12 @@ namespace Experiment
                 }
             }, true, recursionCount);
             return ReturnOutputs();
+        }
+
+        private void ClearValues()
+        {
+            foreach (var n in Neurons)
+                n.Value = 0.0;
         }
 
         private double[] ReturnOutputs()
@@ -246,7 +253,7 @@ namespace Experiment
         {
             try
             {
-                if (new StackTrace().FrameCount > 25) Debugger.Break();
+                //if (new StackTrace().FrameCount > 25) Debugger.Break();
                 
                 bool hasVisited = visited.Contains(n);
                 if (revisit || !hasVisited)
@@ -261,7 +268,7 @@ namespace Experiment
                 if (!hasVisited)
                     visited.Add(n);
 
-                if (recursionCount > n.RecursionCount)
+                if (recursionCount + 1 > n.RecursionCount)
                 {
                     if (forward)
                     {
@@ -635,21 +642,21 @@ namespace Experiment
                 targets[0].Length,
                 maxHiddenNeurons,
                 populationSize,
-                a1, a3, a3, bPls, bPlw, bSSl);
+                a1, a2, a3, bPls, bPlw, bSSl);
 
             double bestF = double.MaxValue;
             Fitness best = null;
             double pgs = 0, pgw = 0, ssg = 0;
-            int keep = (int)((double)populationSize * .2);
+            int keep = 2; //(int)((double)populationSize * .1);
             while (generations > 0 && sCount > 0 && bestF > acceptableError)
             {
-                //if (generations % 10 == 0 || best == null)
-                //{
+                if (generations % 10 == 0 || best == null)
+                {
                     // update global mutation rates every 10 generations
                     pgs = Pgs();
                     pgw = Pgw();
                     ssg = SSg();
-                //}
+                }
 
                 // mutate network, keeping top two parents for next gen
                 Fitness thisBest;
@@ -725,7 +732,7 @@ namespace Experiment
 
                 for (int n = keep; n < keep * 2; n++)
                 {
-                    networks[n] = Mutate(networks[n-keep], Ps, Pw, SS); // clone and mutate keepers
+                    networks[n] = Mutate(networks[n - keep], Ps, Pw, SS); // clone and mutate keepers
                 }
 
                 for (int n = keep * 2; n < networks.Count; n++) // leave the top two from previous generation
@@ -737,6 +744,19 @@ namespace Experiment
                 {
                     networks[n] = networks[n].Clone(); // clone keepers
                 }
+
+                //int nn = 1;
+                //int nnn = 1;
+                //networks[0] = networks[0].Clone(); // don't mutate best fit
+                //List<Fitness> keepers = new List<Fitness>(networks.Take(keep));
+                //while (nn < networks.Count)
+                //{
+                //    networks[nn] = Mutate(keepers[nnn], Ps, Pw, SS); // mutate keepers only
+                //    nn++;
+                //    nnn++;
+                //    if (nnn >= keep) nnn = 0;
+                //}
+
             }
         }
 
@@ -771,6 +791,7 @@ namespace Experiment
                     newN = new Neuron(n.Name);
 
                 newN.Bias = n.Bias;
+                newN.Value = n.Value;
 
                 neurons.Add(newN.Name, newN);
             }
@@ -782,18 +803,20 @@ namespace Experiment
                 {
                     Neuron dest = neurons[s.Receiver.Name];
                     var sNew = new Synapse(source, dest) { Weight = s.Weight };
-                    source.Axons.Add(s);
-                    dest.Dendrites.Add(s);
+                    source.Axons.Add(sNew);
+                    dest.Dendrites.Add(sNew);
                 }
             }
-            return new Network<T>(this._inputTransform, neurons.Values.ToArray());
+            var clone = new Network<T>(this._inputTransform, neurons.Values.ToArray());
+            
+            return clone;
         }
 
         private Network<T> Mutate(double Ps, double Pw, double SS)
         {
             Neuron[] neurons = this.Clone().Neurons;
             Func<double, double> adjust = (ss) => Gaussian(0, ss);
-            _cc = -1;
+            _cc = _ccI = _ccO = -1;
 
             Network<T> child;
             do
@@ -867,7 +890,9 @@ namespace Experiment
                     }
                 }
                 child = new Network<T>(this._inputTransform, neurons);
-            } while (child.ConnectionCount == 0);
+            } while (child.ConnectionCount == 0
+                || child.InputConnectionCount == 0
+                || child.OutputConnectionCount == 0);
 
             
             return child;
@@ -991,6 +1016,11 @@ namespace Experiment
                 return new Fitness(this.Network.Clone(),
                     this.A1, this.A2, this.A3, this.BasePls, this.BasePlw, this.BaseSSl);
             }
+
+            public override string ToString()
+            {
+                return string.Format("F: {0}, N:{1}", F, Network);
+            }
         }
 
         public override string ToString()
@@ -1055,6 +1085,32 @@ namespace Experiment
                     _cc = Neurons.Sum(n => n.Axons.Count);
                 }
                 return _cc;
+            }
+        }
+
+        int _ccI = -1;
+        public int InputConnectionCount
+        {
+            get
+            {
+                if (_ccI < 0)
+                {
+                    _ccI = Inputs.Sum(n => n.Axons.Count);
+                }
+                return _ccI;
+            }
+        }
+
+        int _ccO = -1;
+        public int OutputConnectionCount
+        {
+            get
+            {
+                if (_ccO < 0)
+                {
+                    _ccO = Outputs.Sum(n => n.Dendrites.Count);
+                }
+                return _ccO;
             }
         }
     }

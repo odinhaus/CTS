@@ -236,7 +236,7 @@ namespace Experiment
                     new double[]{ 202f }, 
                     new double[]{ 8f }, 
                     new double[]{ 1208f }
-                }, 3, 10, 500d, 1000, 0.005, 0.5, 4, 1,100,1);
+                }, 3, 25, 500d, 10000, 0.4, 0.4, 4, 1, 50, 1);
             Console.WriteLine(evolved.ToString());
             Console.Read();
         }
