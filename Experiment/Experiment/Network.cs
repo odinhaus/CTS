@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -77,7 +78,7 @@ namespace Experiment
                 }
             }
 
-            return new Network<T>(inputTransform, inputs.ToArray()) { _maxDepth = maxDepth };
+            return new Network<T>(inputTransform, neurons.Values.SelectMany(n => n.ToArray()).ToArray()) { _maxDepth = maxDepth };
         }
 
         /// <summary>
@@ -152,26 +153,30 @@ namespace Experiment
                 m = m.NextMatch();
             }
 
-            return new Network<T>(inputTransform, neurons.Values.Where(n => n is Input).ToArray()) { _maxDepth = maxDepth };
+            return new Network<T>(inputTransform, neurons.Values.ToArray()) { _maxDepth = maxDepth };
         }
 
         private Neuron[] _inputs;
         private Neuron[] _outputs;
         private Func<int, T[], double> _inputTransform;
         private int _maxDepth;
-        public Network(Func<int, T[], double> inputTransform, params Neuron[] inputs)
+        public Network(Func<int, T[], double> inputTransform, params Neuron[] neurons)
         {
-            _inputs = inputs;
+            Neurons = neurons;
+            _inputs = neurons.OfType<Input>().ToArray();
             var outputs = new List<Neuron>();
-            Traverse((n, level) => true, (n, level) =>  n is Output, outputs.Add);
-            _outputs = outputs.ToArray();
+            _outputs = neurons.OfType<Output>().ToArray();
             _inputTransform = inputTransform;
+            Results = new double[_outputs.Length];
         }
 
         public Neuron[] Inputs { get { return _inputs; } }
-        public double[] Outputs { get; set; }
+        public Neuron[] Outputs { get { return _outputs; } }
+        public Neuron[] Neurons { get; private set; }
 
-        public double[] Update(T[] inputSignal)
+        public double[] Results { get; private set; }
+
+        public double[] Update(T[] inputSignal, int recursionCount = 1)
         {
             SetInputs(inputSignal);
             Propagate((n) =>
@@ -181,7 +186,7 @@ namespace Experiment
                 {
                     input.Receiver.Value += input.Signaler.Activation() * input.Weight;
                 }
-            });
+            }, true, recursionCount);
             return ReturnOutputs();
         }
 
@@ -199,26 +204,28 @@ namespace Experiment
 
                 outputs[i] = _outputs[i].Activation();
             }
+            Results = outputs;
             return outputs;
         }
 
-        private void Propagate(Action<Neuron> action,  bool allowMultipleVisits = true)
+        private void Propagate(Action<Neuron> action, bool revisit = true, int recursionCount = 0)
         {
-            Propagate(action, (n, level) => !(n is Input), allowMultipleVisits);
+            Propagate(action, (n, level) => !(n is Input), revisit, recursionCount);
         }
 
-        private void Propagate(Action<Neuron> action, Func<Neuron, int, bool> actionSelector, bool allowMultipleVisits = true)
+        private void Propagate(Action<Neuron> action, Func<Neuron, int, bool> actionSelector, bool revisit = true, int recursionCount = 0)
         {
-            Traverse((n, level) => level <= _maxDepth, actionSelector, action, allowMultipleVisits);
+            Traverse((n, level) => true, actionSelector, action, revisit, recursionCount);
         }
 
-        private void BackPropagate(Action<Neuron> action, bool allowMultipleVisits = true)
+        private void BackPropagate(Action<Neuron> action, bool revisit = true, int recursionCount = 0)
         {
-            Traverse((n, level) => level >= 1, (n, level) => !(n is Output), action, allowMultipleVisits, false);
+            Traverse((n, level) => level >= 1, (n, level) => !(n is Output), action, revisit, recursionCount, false);
         }
 
-        private void Traverse(Func<Neuron, int, bool> traversalSelector, Func<Neuron, int, bool> actionSelector, Action<Neuron> action, bool allowMultipleVisits = false, bool forward = true)
+        private void Traverse(Func<Neuron, int, bool> traversalSelector, Func<Neuron, int, bool> actionSelector, Action<Neuron> action, bool revisit, int recursionCount = 0, bool forward = true)
         {
+            if (recursionCount < 0) throw new ArgumentException("Recursion count must be 0 or higher");
             var visited = new HashSet<Neuron>();
             int level = forward ? 1 : _maxDepth;
             Neuron[] start = forward ? _inputs : _outputs;
@@ -226,56 +233,80 @@ namespace Experiment
             {
                 _traverseNode = n;
                 if (traversalSelector(n, level))
-                    TraverseRecurse(n, traversalSelector, actionSelector, action, allowMultipleVisits, forward, ref level, ref visited);
+                {
+                    n.RecursionCount++;
+                    TraverseRecurse(n, traversalSelector, actionSelector, action, revisit, recursionCount, forward, ref level, ref visited);
+                    n.RecursionCount--;
+                }
             }
         }
 
         private Neuron _traverseNode = null;
-        private void TraverseRecurse(Neuron n, Func<Neuron, int, bool> traversalSelector, Func<Neuron, int, bool> actionSelector, Action<Neuron> action, bool allowMultipleVisits, bool forward, ref int level, ref HashSet<Neuron> visited)
+        private void TraverseRecurse(Neuron n, Func<Neuron, int, bool> traversalSelector, Func<Neuron, int, bool> actionSelector, Action<Neuron> action, bool revisit, int recursionCount, bool forward, ref int level, ref HashSet<Neuron> visited)
         {
-            if (allowMultipleVisits || !visited.Contains(n))
+            try
             {
-                if (actionSelector(n, level))
+                if (new StackTrace().FrameCount > 25) Debugger.Break();
+                
+                bool hasVisited = visited.Contains(n);
+                if (revisit || !hasVisited)
                 {
-                    action(n);
-                }
-                visited.Add(n);
-            }
-            
-            if (forward)
-            {
-                foreach (var nn in n.Axons)
-                {
-                    level++;
-                    if (traversalSelector(nn.Receiver, level))
+                    if (actionSelector(n, level))
                     {
-                        _traverseNode = n;
-                        TraverseRecurse(nn.Receiver, traversalSelector, actionSelector, action, allowMultipleVisits, forward, ref level, ref visited);
-                        _traverseNode = n;
+                        action(n);
                     }
-                    level--;
+                }
+                else return;
+
+                if (!hasVisited)
+                    visited.Add(n);
+
+                if (recursionCount > n.RecursionCount)
+                {
+                    if (forward)
+                    {
+                        foreach (var nn in n.Axons)
+                        {
+                            level++;
+                            if (traversalSelector(nn.Receiver, level))
+                            {
+                                _traverseNode = n;
+                                n.RecursionCount++;
+                                TraverseRecurse(nn.Receiver, traversalSelector, actionSelector, action, revisit, recursionCount, forward, ref level, ref visited);
+                                n.RecursionCount--;
+                                _traverseNode = n;
+                            }
+                            level--;
+                        }
+                    }
+                    else
+                    {
+                        foreach (var nn in n.Dendrites)
+                        {
+                            level--;
+                            if (traversalSelector(nn.Signaler, level))
+                            {
+                                _traverseNode = n;
+                                n.RecursionCount++;
+                                TraverseRecurse(nn.Signaler, traversalSelector, actionSelector, action, revisit, recursionCount, forward, ref level, ref visited);
+                                n.RecursionCount--;
+                                _traverseNode = n;
+                            }
+                            level++;
+                        }
+                    }
                 }
             }
-            else
+            finally
             {
-                foreach (var nn in n.Dendrites)
-                {
-                    level--;
-                    if (traversalSelector(nn.Signaler, level))
-                    {
-                        _traverseNode = n;
-                        TraverseRecurse(nn.Signaler, traversalSelector, actionSelector, action, allowMultipleVisits, forward, ref level, ref visited);
-                        _traverseNode = n;
-                    }
-                    level++;
-                }
+                
             }
         }
 
         protected void SetInputs(T[] inputSignal)
         {
             _inputIndex = 0;
-            Traverse((n, level) => n is Input, (n, level) => true, (n) => SetInputs(n, inputSignal), false);
+            Traverse((n, level) => n is Input, (n, level) => true, (n) => SetInputs(n, inputSignal), false, 1);
         }
 
         private int _inputIndex = 0;
@@ -370,7 +401,7 @@ namespace Experiment
                                 props.Add(nD);
                             }
                         }
-                    }, true);
+                    });
                 }
                 if (error <= errorMin) return;
                 if (epoch % 10000 == 0) Console.WriteLine("epoch: {0}; error: {1}; derror: {2}, d2error: {3}", epoch, error, derror, d2error);
@@ -395,7 +426,7 @@ namespace Experiment
                 if (!(n is Input)) n.Value = 0;
                 foreach (var dend in n.Dendrites)
                     dend.Weight = w0 * (2 * (r.NextDouble() - 0.5));
-            }, (n, l) => true, false);
+            }, (n, l) => true, false, 1);
         }
 
         private void Randomize(T[][] signals, double[][] targets, out T[][] signalsR, out double[][] targetsR)
@@ -417,7 +448,7 @@ namespace Experiment
             targetsR = randT.ToArray();
         }
 
-        private Random _r = new Random();
+        private static Random _r = new Random();
         private double Gaussian(double mean, double stdDev)
         {
             return mean 
@@ -565,6 +596,7 @@ namespace Experiment
                 populationSize,
                 a1, a3, a3, bPls, bPlw, bSSl);
 
+            double bestF = double.MaxValue;
             Fitness best = null;
             double pgs = 0, pgw = 0, ssg = 0;
             while (generations > 0 && sCount > 0)
@@ -578,24 +610,14 @@ namespace Experiment
                 }
 
                 // mutate network, keeping top two parents for next gen
-                Mutate(networks, 2, pgs, pgw, ssg);
+                Fitness thisBest;
+                Mutate(networks, 5, pgs, pgw, ssg, out thisBest);
 
-                // run the networks
-                for (int p = 0; p < targets.Length; p++)
-                {
-                    double[] target = targets[p];
-                    T[] signal = signals[p];
-                    for (int n = 0; n < populationSize; n++)
-                    {
-                        networks[n].Network.Update(signal);
-                        networks[n].Increment(target);
-                    }
-                }
-
-                if (best == null || networks[0].F < best.F)
+                if (thisBest.F < bestF)
                 {
                     // new best fit in this generation was found
-                    best = networks[0];
+                    best = thisBest;
+                    bestF = thisBest.F;
                     // reset local min escape counter
                     sCount = S;
                     // update global mutation rates
@@ -603,9 +625,23 @@ namespace Experiment
                     tPgw = Pgw();
                     tSSg = SSg();
                 }
+                //else if (thisBest.F > bestF) Debugger.Break();
+                
+                // run the networks
+                for (int p = 0; p < targets.Length; p++)
+                {
+                    double[] target = targets[p];
+                    T[] signal = signals[p];
+                    for (int n = 0; n < populationSize; n++)
+                    {
+                        networks[n].Network.Update(signal, 1);
+                        networks[n].Increment(target);
+                    }
+                }
 
                 sCount--;
                 generations--;
+                if (generations % 10 == 0) Console.WriteLine(string.Format("F: {0}, Best.F: {1}, Complexity: {2}", bestF, best.F, best.Complexity ));
             }
 
             return best.Network;
@@ -615,28 +651,37 @@ namespace Experiment
             int keep, 
             double Pgs, 
             double Pgw, 
-            double SSg)
+            double SSg,
+            out Fitness best)
         {
             // order by best fit
             networks.Sort((f1, f2) =>
             {
-                int val = -f1.F.CompareTo(f2.F);
+                int val = f1.F.CompareTo(f2.F);
                 if (val == 0)
                 {
                     // fitness function values match, so prefer lesser complexity
-                    val = -f1.Complexity.CompareTo(f2.Complexity);
+                    val = f1.Complexity.CompareTo(f2.Complexity);
                 }
                 return val;
             });
-
-            double Fbest = networks[0].F;
-            Func<Fitness, double> Ps = (n) => Pgs + n.Pls(Fbest); // (7)
-            Func<Fitness, double> Pw = (n) => Pgw + n.Plw(Fbest); // (8)
-            Func<Fitness, double> SS = (n) => SSg + n.SSl(Fbest); // (9)
-            
-            for (int n = 2; n < networks.Count; n++)
+            best = networks[0];
+            double Fbest = best.F;
+            if (!Fbest.Equals(double.NaN)) // network hasn't been run
             {
-                networks[n] = Mutate(networks[n], Ps, Pw, SS);
+                Func<Fitness, double> Ps = (n) => Pgs + n.Pls(Fbest); // (7)
+                Func<Fitness, double> Pw = (n) => Pgw + n.Plw(Fbest); // (8)
+                Func<Fitness, double> SS = (n) => SSg + n.SSl(Fbest); // (9)
+
+                for (int n = keep; n < keep * 2; n++)
+                {
+                    networks[n] = Mutate(networks[n-keep], Ps, Pw, SS); // clone and mutate keepers
+                }
+
+                for (int n = keep * 2; n < networks.Count; n++) // leave the top two from previous generation
+                {
+                    networks[n] = Mutate(networks[n], Ps, Pw, SS);
+                }
             }
         }
 
@@ -645,7 +690,119 @@ namespace Experiment
             Func<Fitness, double> Pw, 
             Func<Fitness, double> SS)
         {
-            throw new NotImplementedException();
+            return new Fitness(
+                fitness.Network.Mutate(Ps(fitness), Pw(fitness), SS(fitness)),
+                fitness.A1,
+                fitness.A2, 
+                fitness.A3,
+                fitness.BasePls,
+                fitness.BasePlw,
+                fitness.BaseSSl);
+        }
+
+        public Network<T> Clone()
+        {
+            Dictionary<string, Neuron> neurons = new Dictionary<string, Neuron>();
+            foreach (var n in this.Neurons)
+            {
+                Neuron newN;
+                if (n is Dead)
+                    newN = new Dead(n.Name);
+                else if (n is Input)
+                    newN = new Input(n.Name);
+                else if (n is Output)
+                    newN = new Output(n.Name);
+                else
+                    newN = new Neuron(n.Name);
+
+                newN.Bias = n.Bias;
+
+                neurons.Add(newN.Name, newN);
+            }
+
+            foreach (var n in this.Neurons)
+            {
+                Neuron source = neurons[n.Name];
+                foreach (var s in n.Axons)
+                {
+                    Neuron dest = neurons[s.Receiver.Name];
+                    var sNew = new Synapse(source, dest) { Weight = s.Weight };
+                    source.Axons.Add(s);
+                    dest.Dendrites.Add(s);
+                }
+            }
+            return new Network<T>(this._inputTransform, neurons.Values.ToArray());
+        }
+
+        private Network<T> Mutate(double Ps, double Pw, double SS)
+        {
+            Neuron[] neurons = this.Clone().Neurons;
+            Func<double, double> adjust = (ss) => Gaussian(0, ss);
+            _cc = -1.0;
+            // do structure changes first
+            for (int n = 0; n < neurons.Length; n++)
+            {
+                Neuron source = neurons[n];
+                if (!(source is Dead) && Pw >= _r.NextDouble())
+                {
+                    source.Bias += adjust(SS);
+                }
+                if (source.GetType().Equals(typeof(Neuron))
+                    && source.Axons.Count == 0
+                    && source.Dendrites.Count == 0)
+                {
+                    source = new Dead(source.Name);
+                    neurons[n] = source;
+                }
+
+                for (int nn = 0; nn < neurons.Length; nn++)
+                {
+                    Neuron target = neurons[nn];
+                    if (nn == n || target is Input) continue; // neurons can't connect back to inputs
+                    Synapse s = source.Axons.Where(ss => ss.Receiver.Equals(target)).FirstOrDefault();
+                    if (s == null)
+                    {
+                        if (Ps >= _r.NextDouble()) // check to add a connection
+                        {
+                            // not connected
+                            s = new Synapse(source, target) { Weight = _r.NextDouble() * 2.0 - 1.0 };
+                            source.Axons.Add(s);
+                            target.Dendrites.Add(s);
+                        }
+                    }
+                    else if (s.Receiver is Dead)
+                    {
+                        if (Ps >= _r.NextDouble()) // check to add a connection
+                        {
+                            // make it alive
+                            target.Dendrites.Remove(s);
+                            source.Axons.Remove(s);
+                            target = new Neuron(target.Name);
+                            s = new Synapse(source, target) { Weight = _r.NextDouble() * 2.0 - 1.0 };
+                            source.Axons.Add(s);
+                            target.Dendrites.Add(s);
+                        }
+                    }
+                    else
+                    {
+                        if (Ps >= _r.NextDouble()) // check to kill the connetion
+                        {
+                            // kill it
+                            target.Dendrites.Remove(s);
+                            source.Axons.Remove(s);
+                        }
+                        else if (Pw >= _r.NextDouble()) // check to modify its weight
+                        {
+                            s.Weight += adjust(SS);
+                        }
+                    }
+                    neurons[nn] = target;
+                }
+                
+            }
+            if (neurons.OfType<Output>().Count() == 0) Debugger.Break();
+            Network<T> child = new Network<T>(this._inputTransform, neurons);
+            return child;
         }
 
         private static List<Fitness> CreateNetworks(
@@ -746,7 +903,7 @@ namespace Experiment
                 double sumSqrT = 0.0;
                 for (int o = 0; o < targets.Length; o++)
                 {
-                    sumSqrT += Math.Pow(targets[o] - Network.Outputs[o], 2);
+                    sumSqrT += Math.Pow(targets[o] - Network.Results[o], 2);
                 }
                 _sumSqr += sumSqrT;
                 _patternCount++;
@@ -809,10 +966,21 @@ namespace Experiment
                     }
                 }
             };
-            Traverse(traverse, actionSelect, action, true);
+            Traverse(traverse, actionSelect, action, true, 1);
             return sb.ToString();
         }
 
-        public double ConnectionCount { get; set; }
+        double _cc = -1.0;
+        public double ConnectionCount 
+        {
+            get
+            {
+                if (_cc < 0)
+                {
+                    _cc = Neurons.Sum(n => n.Axons.Count);
+                }
+                return _cc;
+            }
+        }
     }
 }

@@ -43,6 +43,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Dead.cs" />
     <Compile Include="Dwt97.cs" />
     <Compile Include="ImageHelper.cs" />
     <Compile Include="Input.cs" />

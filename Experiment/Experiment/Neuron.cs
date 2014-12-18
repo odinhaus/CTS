@@ -92,5 +92,7 @@ namespace Experiment
         {
             return string.Format("{0}, {1}, {2}, {3}", Name, Bias, Value, Axons.Count());
         }
+
+        public int RecursionCount { get; set; }
     }
 }

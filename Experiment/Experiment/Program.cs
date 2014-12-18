@@ -184,43 +184,59 @@ namespace Experiment
 
             double[] output;
             //Network<float> xor = Network<float>.Create(valT, 4, (idx, signal) => signal[idx]);
-            Network<float> xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //Network<float> xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
 
-            output = xor.Update(new float[] { 1f, 2f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new float[] { 2f, 200f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new float[] { 1f, 7f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new float[] { 208f, 1000f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 1f, 2f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 2f, 200f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 1f, 7f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 208f, 1000f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
 
-            Console.WriteLine("New Training");
-            xor.Train(
+            //Console.WriteLine("New Training");
+            //xor.Train(
+            //    new float[][] 
+            //    {
+            //        new float[] { 1f, 2f }, 
+            //        new float[] { 2f, 200f },
+            //        new float[] { 1f, 7f },
+            //        new float[] { 208f, 1000f }
+            //    }, 
+            //    new double[][] 
+            //    {
+            //        new double[]{ 3f }, 
+            //        new double[]{ 202f }, 
+            //        new double[]{ 8f }, 
+            //        new double[]{ 1208f }
+            //    }, false, 0.0000005, 0.9, 0.2, 100000000, 0.00000000000005);
+            //string xorStr = xor.ToString();
+            //Console.WriteLine(xorStr);
+            //output = xor.Update(new float[] { 1f, 2f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 2f, 200f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 1f, 7f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+            //output = xor.Update(new float[] { 208f, 1000f });
+            //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+
+            var evolved = Network<float>.Create((idx, signal) => signal[idx],
                 new float[][] 
                 {
                     new float[] { 1f, 2f }, 
                     new float[] { 2f, 200f },
                     new float[] { 1f, 7f },
                     new float[] { 208f, 1000f }
-                }, 
+                },
                 new double[][] 
                 {
                     new double[]{ 3f }, 
                     new double[]{ 202f }, 
                     new double[]{ 8f }, 
                     new double[]{ 1208f }
-                }, false, 0.0000005, 0.9, 0.2, 100000000, 0.00000000000005);
-            string xorStr = xor.ToString();
-            Console.WriteLine(xorStr);
-            output = xor.Update(new float[] { 1f, 2f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new float[] { 2f, 200f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new float[] { 1f, 7f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
-            output = xor.Update(new float[] { 208f, 1000f });
-            Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
+                }, 3);
 
             Console.Read();
         }
