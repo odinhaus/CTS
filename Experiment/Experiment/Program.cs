@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -236,7 +238,12 @@ namespace Experiment
                     new double[]{ 202f }, 
                     new double[]{ 8f }, 
                     new double[]{ 1208f }
-                }, 3, 25, 500d, 10000, 0.4, 0.4, 4, 1, 50, 1);
+                }, 3, 100, 500d, 1000, 0.2, 0.6, .5, 1, 50, 1);
+            BinaryFormatter bf = new BinaryFormatter();
+            using (var s = new FileStream("evolved.bin", FileMode.Create))
+            {
+                bf.Serialize(s, evolved);
+            }
             Console.WriteLine(evolved.ToString());
             Console.Read();
         }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace Experiment
 {
+    [Serializable]
     public class Synapse
     {
         public Synapse(Neuron signaler, Neuron receiver)

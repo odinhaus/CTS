@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace Experiment
 {
+    [Serializable]
     public class Output : Neuron
     {
         public Output(string name = null, IEnumerable<Neuron> inputs = null) 

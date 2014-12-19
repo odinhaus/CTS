@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace Experiment
 {
+    [Serializable]
     public class Neuron
     {
         private static int _index = 0;

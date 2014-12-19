@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace Experiment
 {
+    [Serializable]
     public class Dead : Neuron
     {
         public Dead(string name = null)

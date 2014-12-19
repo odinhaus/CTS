@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace Experiment
 {
+    [Serializable]
     public class Network<T>
     {
         public static Network<T> Create(int[] topology, Func<int, T[], double> inputTransform, double bias0 = 0, double weight0 = 1 )
@@ -647,7 +648,7 @@ namespace Experiment
             double bestF = double.MaxValue;
             Fitness best = null;
             double pgs = 0, pgw = 0, ssg = 0;
-            int keep = 2; //(int)((double)populationSize * .1);
+            int keep = (int)((double)populationSize * .1);
             while (generations > 0 && sCount > 0 && bestF > acceptableError)
             {
                 if (generations % 10 == 0 || best == null)
@@ -664,6 +665,7 @@ namespace Experiment
 
                 if (thisBest.F < bestF)
                 {
+                    int lifespan = best == null ? 0 : best.Generations;
                     // new best fit in this generation was found
                     best = thisBest;
                     bestF = thisBest.F;
@@ -673,8 +675,9 @@ namespace Experiment
                     tPgs = Pgs();
                     tPgw = Pgw();
                     tSSg = SSg();
-                    Console.WriteLine(string.Format("G: {3}, F: {0}, Best.F: {1}, Complexity: {2}", bestF, best.F, best.Complexity, generations));
+                    Console.WriteLine(string.Format("G: {2}, L: {3}, F: {0}, Complexity: {1}", bestF, best.Complexity, generations, lifespan));
                 }
+                else if (best != null) best.Generations++;
                 //else if (thisBest.F > bestF) Debugger.Break();
 
                 // run the networks
@@ -721,42 +724,40 @@ namespace Experiment
                 }
                 return val;
             });
+
+            double Fbest = networks[0].F;
             best = networks[0];
-            double Fbest = best.F;
-            if (!Fbest.Equals(double.NaN)) // network hasn't been run
+            
+            for (int n = 0; n < keep; n++)
             {
-                Func<Fitness, double> Ps = (n) => Pgs + n.Pls(Fbest); // (7)
-                Func<Fitness, double> Pw = (n) => Pgw + n.Plw(Fbest); // (8)
-                Func<Fitness, double> SS = (n) => SSg + n.SSl(Fbest); // (9)
-
-                for (int n = keep; n < keep * 2; n++)
-                {
-                    networks[n] = Mutate(networks[n - keep], Ps, Pw, SS); // clone and mutate keepers
-                }
-
-                for (int n = keep * 2; n < networks.Count; n++) // leave the top two from previous generation
-                {
-                    networks[n] = Mutate(networks[n], Ps, Pw, SS);
-                }
-
-                for (int n = 0; n < keep; n++)
-                {
-                    networks[n] = networks[n].Clone(); // clone keepers
-                }
-
-                //int nn = 1;
-                //int nnn = 1;
-                //networks[0] = networks[0].Clone(); // don't mutate best fit
-                //List<Fitness> keepers = new List<Fitness>(networks.Take(keep));
-                //while (nn < networks.Count)
-                //{
-                //    networks[nn] = Mutate(keepers[nnn], Ps, Pw, SS); // mutate keepers only
-                //    nn++;
-                //    nnn++;
-                //    if (nnn >= keep) nnn = 0;
-                //}
-
+                networks[n].Generations++;
+                networks[n] = networks[n].Clone(); // clone keepers
             }
+
+            Func<Fitness, double> Ps = (n) => Pgs + n.Pls(Fbest); // (7)
+            Func<Fitness, double> Pw = (n) => Pgw + n.Plw(Fbest); // (8)
+            Func<Fitness, double> SS = (n) => SSg + n.SSl(Fbest); // (9)
+
+            for (int n = networks.Count - 1; n > keep; n--)
+            {
+                networks[n] = Mutate(networks[n - keep], Ps, Pw, SS); // clone and mutate keepers
+                networks[n].Generations = 0;
+            }
+
+            #region mutate keepers only
+            //int nn = 1;
+            //int nnn = 1;
+            //networks[0] = networks[0].Clone(); // don't mutate best fit
+            //List<Fitness> keepers = new List<Fitness>(networks.Take(keep));
+            //while (nn < networks.Count)
+            //{
+            //    networks[nn] = Mutate(keepers[nnn], Ps, Pw, SS); // mutate keepers only
+            //    nn++;
+            //    nnn++;
+            //    if (nnn >= keep) nnn = 0;
+            //}
+            #endregion
+
         }
 
         private static Fitness Mutate(Fitness fitness, 
@@ -813,18 +814,18 @@ namespace Experiment
 
         private Network<T> Mutate(double Ps, double Pw, double SS)
         {
-            Neuron[] neurons = this.Clone().Neurons;
             Func<double, double> adjust = (ss) => Gaussian(0, ss);
             _cc = _ccI = _ccO = -1;
 
             Network<T> child;
             do
             {
+                Neuron[] neurons = this.Clone().Neurons;
                 // do structure changes first
                 for (int n = 0; n < neurons.Length; n++)
                 {
                     Neuron source = neurons[n];
-                    if (!(source is Dead) && Pw > _r.NextDouble())
+                    if (Pw > _r.NextDouble())
                     {
                         source.Bias += adjust(SS);
                     }
@@ -848,7 +849,11 @@ namespace Experiment
                             if (Ps > PsR) // check to add a connection
                             {
                                 // not connected
-                                var s = new Synapse(source, target) {Weight = adjust(SS)};
+                                if (target is Dead)
+                                {
+                                    target = new Neuron(target.Name) { Bias = target.Bias };
+                                }
+                                var s = new Synapse(source, target) { Weight = adjust(SS) };
                                 source.Axons.Add(s);
                                 target.Dendrites.Add(s);
                             }
@@ -864,14 +869,13 @@ namespace Experiment
                                         // make it alive
                                         target.Dendrites.Remove(s);
                                         source.Axons.Remove(s);
-                                        target = new Neuron(target.Name);
+                                        target = new Neuron(target.Name) { Bias = target.Bias };
                                         var newS = new Synapse(source, target);
                                         source.Axons.Add(newS);
                                         target.Dendrites.Add(newS);
                                     }
                                     else
                                     {
-
                                         // kill it
                                         target.Dendrites.Remove(s);
                                         source.Axons.Remove(s);
@@ -928,7 +932,7 @@ namespace Experiment
             }
             return population;
         }
-
+        [Serializable]
         class Fitness
         {
             public Fitness(Network<T> network, double a1, double a2, double a3,
@@ -948,15 +952,24 @@ namespace Experiment
 
             public double TrainingError
             {
-                get { return (100.0/(_patternCount*Network.Outputs.Length))*_sumSqr; }
+                get
+                {
+                    double val = (100.0/(_patternCount*Network.Outputs.Length))*_sumSqr;
+                    if (double.NaN.Equals(val))
+                    {
+                        return double.MaxValue;
+                    }
+                    return val;
+                }
             }
-            public double Complexity { get; private set; }
+            public double Complexity { get { return Math.Log(Network.ConnectionCount); } }
             public double A1 { get; private set; }
             public double A2 { get; private set; }
             public double A3 { get; private set; }
             public double BasePls { get; private set; }
             public double BasePlw { get; private set; }
             public double BaseSSl { get; private set; }
+            public int Generations { get; set; }
   
 
             public double Pls(double Fbest)
@@ -1004,7 +1017,6 @@ namespace Experiment
 
             public void Reset()
             {
-                Complexity = Math.Log(Network.ConnectionCount);
                 _patternCount = 0;
                 _sumSqr = 0.0;
                 _updateF = true;
@@ -1013,7 +1025,8 @@ namespace Experiment
             public Fitness Clone()
             {
                 return new Fitness(this.Network.Clone(),
-                    this.A1, this.A2, this.A3, this.BasePls, this.BasePlw, this.BaseSSl);
+                    this.A1, this.A2, this.A3, this.BasePls, this.BasePlw, this.BaseSSl)
+                    { Generations = this.Generations };
             }
 
             public override string ToString()
