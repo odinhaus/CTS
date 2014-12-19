@@ -673,6 +673,7 @@ namespace Experiment
                     tPgs = Pgs();
                     tPgw = Pgw();
                     tSSg = SSg();
+                    Console.WriteLine(string.Format("G: {3}, F: {0}, Best.F: {1}, Complexity: {2}", bestF, best.F, best.Complexity, generations));
                 }
                 //else if (thisBest.F > bestF) Debugger.Break();
 
@@ -683,8 +684,6 @@ namespace Experiment
                 generations--;
 
                 if (acceptableError < double.MaxValue && sCount == 0) sCount = S;
-
-                if (generations % 10 == 0) Console.WriteLine(string.Format("F: {0}, Best.F: {1}, Complexity: {2}", bestF, best.F, best.Complexity));
             }
 
             return best.Network;
