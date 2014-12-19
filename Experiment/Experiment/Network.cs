@@ -269,7 +269,7 @@ namespace Experiment
                 if (!hasVisited)
                     visited.Add(n);
 
-                if (recursionCount + 1 > n.RecursionCount)
+                if (recursionCount + 1 >= n.RecursionCount)
                 {
                     if (forward)
                     {
@@ -332,7 +332,9 @@ namespace Experiment
             double w0 = 0.2,
             double epochMax = 100000,
             double errorMin = 0.00002,
-            Func<double, double, double> errorFunction = null)
+            Func<double, double, double> errorFunction = null,
+            double converganceRateMin = -0.2,
+            int converganceRateEpochs = 50)
         {
             if (!inputSignalsSet.Length.Equals(targetsSet.Length)) throw new ArgumentException("Input signal set and target output set must be the same length.");
 
@@ -356,6 +358,7 @@ namespace Experiment
             double derror = 0;
             double pderror = 0;
             double d2error = 0;
+            List<double> derrors = new List<double>();
 
             for (int epoch = 0; epoch < epochMax; epoch++)
             {
@@ -412,7 +415,7 @@ namespace Experiment
                     });
                 }
                 if (error <= errorMin) return;
-                if (epoch % 10000 == 0) Console.WriteLine("epoch: {0}; error: {1}; derror: {2}, d2error: {3}", epoch, error, derror, d2error);
+                if (epoch > 0 && epoch % 1000 == 0) Console.WriteLine("epoch: {0}; error: {1}; derror: {2}", epoch, error, derrors.Average());
 
                 if (epoch > 0) derror = error - perror;
                 if (epoch > 1)
@@ -421,6 +424,12 @@ namespace Experiment
                 }
                 pderror = derror;
                 perror = error;
+                derrors.Add(derror);
+                if (epoch > converganceRateEpochs)
+                {
+                    derrors.RemoveAt(0);
+                    if (derrors.Average() > converganceRateMin) return;
+                }
                 error = 0;
             }
         }
@@ -661,7 +670,7 @@ namespace Experiment
 
                 // mutate network, keeping top two parents for next gen
                 Fitness thisBest;
-                Mutate(networks, keep, pgs, pgw, ssg, out thisBest);
+                Mutate(networks, keep, pgs, pgw, ssg, out thisBest, acceptableError);
 
                 if (thisBest.F < bestF)
                 {
@@ -686,7 +695,12 @@ namespace Experiment
                 sCount--;
                 generations--;
 
-                if (acceptableError < double.MaxValue && sCount == 0) sCount = S;
+                if (acceptableError < double.MaxValue && sCount == 0)
+                {
+                    // try using backprop error training to improve the weights and biases
+                    networks[0].Network.Train(signals, targets, false, 0.0001, 0.6, 0.2, 1000000);
+                    sCount = S;
+                }
             }
 
             return best.Network;
@@ -711,7 +725,8 @@ namespace Experiment
             double Pgs, 
             double Pgw, 
             double SSg,
-            out Fitness best)
+            out Fitness best,
+            double targetF = 10000)
         {
             // order by best fit
             networks.Sort((f1, f2) =>
@@ -726,6 +741,9 @@ namespace Experiment
             });
 
             double Fbest = networks[0].F;
+
+            keep = (int)((double)networks.Count - (double)(networks.Count - keep) * (1d / (Math.Pow(Math.Tanh(Fbest/targetF), 2d))));
+
             best = networks[0];
             
             for (int n = 0; n < keep; n++)

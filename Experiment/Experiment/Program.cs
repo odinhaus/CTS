@@ -238,7 +238,7 @@ namespace Experiment
                     new double[]{ 202f }, 
                     new double[]{ 8f }, 
                     new double[]{ 1208f }
-                }, 3, 100, 500d, 1000, 0.2, 0.6, .5, 1, 50, 1);
+                }, 3, 100, 500d, 100, 0.2, 0.6, .5, 1, 50, 1);
             BinaryFormatter bf = new BinaryFormatter();
             using (var s = new FileStream("evolved.bin", FileMode.Create))
             {
