@@ -12,17 +12,15 @@ namespace Experiment
         public Output(string name = null, IEnumerable<Neuron> inputs = null) 
             : base(name, null, null, null, inputs, null)
         {
-            this.Activation = () =>
+            this._Activation = () =>
             {
-                LastActivation = this.Value + this.Bias;
-                return LastActivation;
+                return this.Value + this.Bias;
             };
-            this.Sum = () => this.Target;
+            this._Sum = () => this.Target;
             // use this if you output simple linear activations
-            this.Delta = () =>
+            this._Delta = () =>
             {
-                LastDelta = Sum() - this.LastActivation;
-                return LastDelta;
+                return Sum() - this.LastActivation;
             };
             // use this if you output sigmoid activation values
             //this.Delta = () =>

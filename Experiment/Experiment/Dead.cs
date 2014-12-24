@@ -12,15 +12,15 @@ namespace Experiment
         public Dead(string name = null)
             : base(name, null, null, null, null)
         {
-            this.Activation = () =>
+            this._Activation = () =>
             {
                 return 0.0;
             };
-            this.Delta = () =>
+            this._Delta = () =>
             {
                 return 0.0;
             };
-            this.Sum = () =>
+            this._Sum = () =>
             {
                 return 0.0;
             };

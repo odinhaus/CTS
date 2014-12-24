@@ -12,15 +12,13 @@ namespace Experiment
         public Input(string name = null, IEnumerable<Neuron> outputs = null)
             : base(name, null, null, null, outputs)
         {
-            this.Activation = () =>
+            this._Activation = () =>
             {
-                LastActivation = this.Value + this.Bias;
-                return LastActivation;
+                return this.Value + this.Bias;
             };
-            this.Delta = () =>
+            this._Delta = () =>
             {
-                LastDelta = Sum() - this.LastActivation;
-                return LastDelta;
+                return Sum() - this.LastActivation;
             };
         }
     }

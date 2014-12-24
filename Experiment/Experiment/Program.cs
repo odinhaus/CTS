@@ -20,7 +20,7 @@ namespace Experiment
 
             //// Makes a fancy cubic signal
             //for (i=0;i<32;i++) x[i]=5+i+0.4*i*i-0.02*i*i*i;
-  
+
             //// Prints original sigal x
             //printf("Original signal:\n");
             //for (i=0;i<32;i++) printf("x{0}={1}",i.ToString(),x[i].ToString());
@@ -28,7 +28,7 @@ namespace Experiment
 
             //// Do the forward 9/7 transform
             //Dwt97.Transform(ref x);
-  
+
             //// Prints the wavelet coefficients
             //printf("Wavelets coefficients:\n");
             //for (i=0;i<32;i++) printf("wc{0}={1}",i.ToString(),x[i].ToString());
@@ -133,16 +133,16 @@ namespace Experiment
 
              */
 
-//            string valT = @"    1:1:0.0	[7.59334]	2:1:10.8053	    [-5.995591]	    3:1:5.992307
-//                                1:1		[9.099361]	2:2:-10.68523	[3.917894]	    3:1
-//                                1:1		[-0.767637]	2:3:-12.86904	[2.443218]	    3:1
-//                                1:1		[7.647061]	2:4:-9.290747	[2.086226]	    3:1
-//                                1:1		[0.226191]	2:5:-13.65053	[2.37131]	    3:1
-//                                1:2:0.0	[-9.201358]	2:1
-//                                1:2		[-7.256593]	2:2
-//                                1:2		[2.103945]	2:3
-//                                1:2		[-6.489161]	2:4
-//                                1:2		[1.530591]	2:5";
+            //            string valT = @"    1:1:0.0	[7.59334]	2:1:10.8053	    [-5.995591]	    3:1:5.992307
+            //                                1:1		[9.099361]	2:2:-10.68523	[3.917894]	    3:1
+            //                                1:1		[-0.767637]	2:3:-12.86904	[2.443218]	    3:1
+            //                                1:1		[7.647061]	2:4:-9.290747	[2.086226]	    3:1
+            //                                1:1		[0.226191]	2:5:-13.65053	[2.37131]	    3:1
+            //                                1:2:0.0	[-9.201358]	2:1
+            //                                1:2		[-7.256593]	2:2
+            //                                1:2		[2.103945]	2:3
+            //                                1:2		[-6.489161]	2:4
+            //                                1:2		[1.530591]	2:5";
 
             string valT = @"    1:1:0.0	[0]	2:1:0.0	[0]	    3:1:0.0 [0] 4:1:0.0
                                 1:1		[0]	2:2:0.0	[0]	    3:1
@@ -173,22 +173,22 @@ namespace Experiment
             //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
             //Console.WriteLine();
 
-//            string valT = @"    1:1:0.0	[0]	2:1:0.0	[0]	    3:1:0.0 [0] 4:1:0.0
-//                                1:1		[0]	2:2:0.0	[0]	    3:1
-//                                1:2:0.0	[0]	2:2     [0]     3:2:0.0 [0] 4:1
-//                                1:2		[0]	2:3:0.0 [0]     3:2";
+            //            string valT = @"    1:1:0.0	[0]	2:1:0.0	[0]	    3:1:0.0 [0] 4:1:0.0
+            //                                1:1		[0]	2:2:0.0	[0]	    3:1
+            //                                1:2:0.0	[0]	2:2     [0]     3:2:0.0 [0] 4:1
+            //                                1:2		[0]	2:3:0.0 [0]     3:2";
 
-//            string valT = @"    1:1:0.0 	[0]     2:1:0.0    [0]      3:1:0.0
-//                                1:1         [0]     2:2:0.0    [0]      3:1
-//                                1:2:0.0 	[0]     2:1
-//                                1:2         [0]     2:2
-//                                1:2         [0]     2:3:0.0    [0]      3:1";
+            //            string valT = @"    1:1:0.0 	[0]     2:1:0.0    [0]      3:1:0.0
+            //                                1:1         [0]     2:2:0.0    [0]      3:1
+            //                                1:2:0.0 	[0]     2:1
+            //                                1:2         [0]     2:2
+            //                                1:2         [0]     2:3:0.0    [0]      3:1";
 
             double[] output;
             //Network<float> xor = Network<float>.Create(valT, 4, (idx, signal) => signal[idx]);
-            //Network<float> xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            Network<float> xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
 
-            //output = xor.Update(new float[] { 1f, 2f });
+            output = xor.Update(new float[] { 1f, 2f });
             //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
             //output = xor.Update(new float[] { 2f, 200f });
             //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
@@ -198,21 +198,54 @@ namespace Experiment
             //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
 
             //Console.WriteLine("New Training");
-            //xor.Train(
-            //    new float[][] 
-            //    {
-            //        new float[] { 1f, 2f }, 
-            //        new float[] { 2f, 200f },
-            //        new float[] { 1f, 7f },
-            //        new float[] { 208f, 1000f }
-            //    }, 
-            //    new double[][] 
-            //    {
-            //        new double[]{ 3f }, 
-            //        new double[]{ 202f }, 
-            //        new double[]{ 8f }, 
-            //        new double[]{ 1208f }
-            //    }, false, 0.0000005, 0.9, 0.2, 100000000, 0.00000000000005);
+            float[][] signalsT =
+            {
+                new float[] {1f, 2f},
+                new float[] {2f, 200f},
+                new float[] {1f, 7f},
+                new float[] {208f, 1000f}
+            };
+            double[][] targetsT = new double[][]
+            {
+                new double[] {3f},
+                new double[] {202f},
+                new double[] {8f},
+                new double[] {1208f}
+            };
+
+            //long epochs = 0;
+            //var result = xor.AutoTrain(signalsT, targetsT, false);//, 0.000005, 0.01, 10000, 0.00000000000005, null, 0.2, 500);
+            //epochs += result.Epochs;
+            //while (result.Reason != Network<float>.TrainingResults.TrainingReason.Converged)
+            //{
+            //    result = xor.AutoTrain(signalsT, targetsT, false, result.Eta);
+            //    epochs += result.Epochs;
+            //}
+
+            //epochs = 0;
+            //xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //result = xor.ManualTrain(signalsT, targetsT, false, 0.00000005);
+            //while (result.Reason != Network<float>.TrainingResults.TrainingReason.Converged)
+            //{
+            //    result = xor.ManualTrain(signalsT, targetsT, false, result.Eta);
+            //    epochs += result.Epochs;
+            //}
+
+            //xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //result = xor.AutoTrain(signalsT, targetsT, false, 0.000001);//, 0.01, 10000, 0.00000000000005, null, 0.2, 500);
+
+            //xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //result = xor.AutoTrain(signalsT, targetsT, false, 0.000000095);//, 0.01, 10000, 0.00000000000005, null, 0.2, 500);
+
+            //xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //result = xor.AutoTrain(signalsT, targetsT, false, 0.00000009);//, 0.01, 10000, 0.00000000000005, null, 0.2, 500);
+
+            //xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //result = xor.AutoTrain(signalsT, targetsT, false, 0.00000005); //, 0.01, 10000, 0.00000000000005, null, 0.2, 500);
+
+            //xor = Network<float>.Create(new int[] { 2, 1 }, (idx, signal) => signal[idx], 0.5, 0.5);
+            //result = xor.ManualTrain(signalsT, targetsT, false, 0.00000005); //, 0.6, 0.2, 4000, 0.00000000000005, null, 0.2, 500, 5);
+
             //string xorStr = xor.ToString();
             //Console.WriteLine(xorStr);
             //output = xor.Update(new float[] { 1f, 2f });
@@ -225,24 +258,21 @@ namespace Experiment
             //Console.WriteLine(string.Format("inputs: {0}, {1}  result: {2}", xor.Inputs[0].Value, xor.Inputs[1].Value, output[0]));
 
             var evolved = Network<float>.Create((idx, signal) => signal[idx],
-                new float[][] 
-                {
-                    new float[] { 1f, 2f }, 
-                    new float[] { 2f, 200f },
-                    new float[] { 1f, 7f },
-                    new float[] { 208f, 1000f }
-                },
-                new double[][] 
-                {
-                    new double[]{ 3f }, 
-                    new double[]{ 202f }, 
-                    new double[]{ 8f }, 
-                    new double[]{ 1208f }
-                }, 3, 100, 500d, 100, 0.2, 0.6, .5, 1, 50, 1);
-            BinaryFormatter bf = new BinaryFormatter();
+                signalsT,
+                targetsT,
+                3,
+                100,
+                50d,
+                100,
+                0.2,
+                0.6,
+                .5,
+                1,
+                50,
+                1);
             using (var s = new FileStream("evolved.bin", FileMode.Create))
             {
-                bf.Serialize(s, evolved);
+                evolved.Save(s);
             }
             Console.WriteLine(evolved.ToString());
             Console.Read();

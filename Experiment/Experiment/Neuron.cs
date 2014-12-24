@@ -26,8 +26,7 @@ namespace Experiment
             {
                 activationFunction = () =>
                 {
-                    LastActivation = 1.0/(1.0 + Math.Exp(-(this.Value + this.Bias))); // sigmoid activation function
-                    return LastActivation;
+                    return 1.0/(1.0 + Math.Exp(-(this.Value + this.Bias))); // sigmoid activation function
                 }; 
             }
 
@@ -48,14 +47,13 @@ namespace Experiment
             {
                 deltaFunction = () =>
                 {
-                    this.LastDelta=  Sum() * this.LastActivation * (1 - this.LastActivation);
-                    return this.LastDelta;
+                    return Sum() * this.LastActivation * (1 - this.LastActivation);
                 };
             }
 
-            Activation = activationFunction;
-            Delta = deltaFunction;
-            Sum = sumFunction;
+            _Activation = activationFunction;
+            _Delta = deltaFunction;
+            _Sum = sumFunction;
 
             if (inputs != null)
             {
@@ -80,12 +78,65 @@ namespace Experiment
         public string Name { get; private set; }
         public IList<Synapse> Axons { get; set; }
         public IList<Synapse> Dendrites { get; set; }
-        public Func<double> Activation { get; set; }
-        public Func<double> Delta { get; set; }
-        public Func<double> Sum { get; set; }
+        public Func<double> Activation { get; private set; }
+        public Func<double> Delta { get; private set; }
+        public Func<double> Sum { get; private set; }
 
-        public double LastActivation { get; protected set; }
-        public double LastDelta { get; protected set; }
+        bool isActivating = false;
+        protected Func<double> _Activation
+        {
+            set
+            {
+                Activation = () =>
+                {
+                    if (!isActivating)
+                    {
+                        isActivating = true;
+                        LastActivation = value();
+                        isActivating = false;
+                    }
+                    return LastActivation;
+                };
+            }
+        }
+        bool isDeltaing = false;
+        protected Func<double> _Delta
+        {
+            set
+            {
+                Delta = () =>
+                {
+                    if (!isDeltaing)
+                    {
+                        isDeltaing = true;
+                        LastDelta = value();
+                        isDeltaing = false;
+                    }
+                    return LastDelta;
+                };
+            }
+        }
+        bool isSumming = false;
+        protected Func<double> _Sum
+        {
+            set
+            {
+                Sum = () =>
+                {
+                    if (!isSumming)
+                    {
+                        isSumming = true;
+                        LastSum = value();
+                        isSumming = false;
+                    }
+                    return LastSum;
+                };
+            }
+        }
+
+        public double LastActivation { get; private set; }
+        public double LastDelta { get; private set; }
+        public double LastSum { get; private set; }
         public double Value { get; set; }
         public double Bias { get; set; }
 
@@ -95,5 +146,13 @@ namespace Experiment
         }
 
         public int RecursionCount { get; set; }
+
+        public void Reset()
+        {
+            this.Value = 0.0;
+            this.LastActivation = 0.0;
+            this.LastDelta = 0.0;
+            this.RecursionCount = 0;
+        }
     }
 }

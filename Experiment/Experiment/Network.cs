@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -11,7 +12,7 @@ namespace Experiment
     [Serializable]
     public class Network<T>
     {
-        public static Network<T> Create(int[] topology, Func<int, T[], double> inputTransform, double bias0 = 0, double weight0 = 1 )
+        public static Network<T> Create(int[] topology, Func<int, T[], double> inputTransform, double bias0 = 0, double weight0 = 1)
         {
             int maxDepth = topology.Length;
             if (maxDepth < 2) throw new ArgumentException("Depth must be at least two levels");
@@ -43,7 +44,7 @@ namespace Experiment
                 {
                     for (int i = 0; i < topology[l]; i++)
                     {
-                        Output output = new Output(string.Format("{0}:{1}", l+1, i+1))
+                        Output output = new Output(string.Format("{0}:{1}", l + 1, i + 1))
                         {
                             Bias = bias0
                         };
@@ -62,7 +63,7 @@ namespace Experiment
                 {
                     for (int i = 0; i < topology[l]; i++)
                     {
-                        Neuron neuron = new Neuron(string.Format("{0}:{1}", l+1, i+1))
+                        Neuron neuron = new Neuron(string.Format("{0}:{1}", l + 1, i + 1))
                         {
                             Bias = bias0
                         };
@@ -147,7 +148,7 @@ namespace Experiment
                     neurons.Add(dest, destN);
                 }
 
-                var s = new Synapse(sourceN, destN) {Weight = double.Parse(weight)};
+                var s = new Synapse(sourceN, destN) { Weight = double.Parse(weight) };
                 sourceN.Axons.Add(s);
                 destN.Dendrites.Add(s);
 
@@ -179,8 +180,8 @@ namespace Experiment
 
         public double[] Update(T[] inputSignal, int recursionCount = 1)
         {
-            SetInputs(inputSignal);
             ClearValues();
+            SetInputs(inputSignal);
             Propagate((n) =>
             {
                 n.Value = 0;
@@ -195,7 +196,9 @@ namespace Experiment
         private void ClearValues()
         {
             foreach (var n in Neurons)
-                n.Value = 0.0;
+            {
+                n.Reset();
+            }
         }
 
         private double[] ReturnOutputs()
@@ -255,7 +258,7 @@ namespace Experiment
             try
             {
                 //if (new StackTrace().FrameCount > 25) Debugger.Break();
-                
+
                 bool hasVisited = visited.Contains(n);
                 if (revisit || !hasVisited)
                 {
@@ -307,7 +310,7 @@ namespace Experiment
             }
             finally
             {
-                
+
             }
         }
 
@@ -324,49 +327,136 @@ namespace Experiment
             _inputIndex++;
         }
 
-        public virtual void Train(T[][] inputSignalsSet,
+        public virtual TrainingResults AutoTrain(T[][] inputSignalsSet,
             double[][] targetsSet,
             bool reTrain = true,
-            double eta = 0.05,
+            double etaBestGuess = 0.000005,
+            double w0 = 0.2,
+            double epochMax = 100000,
+            double errorMin = 0.00002,
+            Func<double, double, double> errorFunction = null,
+            double converganceRateMin = 0.0,
+            int converganceRateEpochs = 500,
+            int converganceRollingWindow = 150)
+        {
+            return Train(inputSignalsSet,
+                targetsSet,
+                reTrain,
+                etaBestGuess,
+                0.0,
+                w0,
+                epochMax,
+                errorMin,
+                errorFunction,
+                converganceRateMin,
+                converganceRateEpochs,
+                converganceRollingWindow,
+                true);
+        }
+
+        public virtual TrainingResults ManualTrain(T[][] inputSignalsSet,
+            double[][] targetsSet,
+            bool reTrain = true,
+            double eta = 0.000005,
             double alpha = 0.6,
             double w0 = 0.2,
             double epochMax = 100000,
             double errorMin = 0.00002,
             Func<double, double, double> errorFunction = null,
-            double converganceRateMin = -0.2,
-            int converganceRateEpochs = 50)
+            double converganceRateMin = 0.0,
+            int converganceRateEpochs = 500,
+            int converganceRollingWindow = 150)
         {
+            return Train(inputSignalsSet,
+                targetsSet,
+                reTrain,
+                eta,
+                alpha,
+                w0,
+                epochMax,
+                errorMin,
+                errorFunction,
+                converganceRateMin,
+                converganceRateEpochs,
+                converganceRollingWindow,
+                false);
+        }
+
+        protected virtual TrainingResults Train(T[][] inputSignalsSet,
+            double[][] targetsSet,
+            bool reTrain,
+            double eta,
+            double alpha,
+            double w0,
+            double epochMax,
+            double errorMin,
+            Func<double, double, double> errorFunction,
+            double converganceRateMin,
+            int converganceRateEpochs,
+            int converganceRollingWindow,
+            bool autoAdjustEta)
+        {
+            Console.WriteLine("eta: {0}, alpha: {1}", eta, alpha);
             if (!inputSignalsSet.Length.Equals(targetsSet.Length)) throw new ArgumentException("Input signal set and target output set must be the same length.");
-
-            if (errorFunction == null)
-            {
-                errorFunction = (output, target) =>
-                {
-                    double delta = target - output;
-                    double error = 0.5 * delta * delta;
-                    return error;
-                };
-            }
-
-            int inputSignalCount = inputSignalsSet.Length;
-            
-            if (reTrain)
-                InitializeWeightsAndDeltas(w0);
 
             Dictionary<object, double> deltas = new Dictionary<object, double>();
             double perror = 0;
             double derror = 0;
             double pderror = 0;
             double d2error = 0;
-            List<double> derrors = new List<double>();
+            double pd2error = 0;
+            double d3error = 0;
+            int epoch = 0;
+            List<double> derrors = new List<double>(new double[] { 0d });
+            List<double> d2errors = new List<double>(new double[] { 0d, 0d });
+            List<double> d3errors = new List<double>(new double[] { 0d, 0d, 0d });
+            int rollingAvCount = 2;
 
-            for (int epoch = 0; epoch < epochMax; epoch++)
+            Action dEta = () =>
+            {
+                var d2MCount = d2errors.Count();
+                var dMCount = derrors.Count();
+                var d2M = 0d;
+
+                for (int i = d2MCount - 1; i > d2MCount - 1 - rollingAvCount; i--)
+                    d2M += d2errors[i];
+                d2M /= rollingAvCount;
+
+                var dM = 0d;
+                for (int i = dMCount - 1; i > dMCount - 1 - rollingAvCount; i--)
+                    dM += derrors[i];
+                dM /= rollingAvCount;
+
+                var ratio = d2M / dM;
+                var sign = dM / Math.Abs(dM);
+                var sp = eta * (1 + (1 - sign * 0.999 * Math.Tanh(Math.Pow(Math.Abs(d2M), 1d / 8d)))) / 2d;
+                eta = sp;
+            };
+
+            if (errorFunction == null)
+            {
+                errorFunction = (output, target) =>
+                {
+                    double delta = target - output;
+                    double err = 0.5 * delta * delta;
+                    return err;
+                };
+            }
+
+            int inputSignalCount = inputSignalsSet.Length;
+
+            if (reTrain)
+                InitializeWeightsAndDeltas(w0);
+
+            Console.WriteLine("epoch, error, derror, d2error, d3error, delta, eta");
+            double error = 0;
+            for (epoch = 0; epoch < epochMax; epoch++)
             {
                 T[][] inputSignalsSetR;
                 double[][] targetsSetR;
-                double error = 0;
+
                 Randomize(inputSignalsSet, targetsSet, out inputSignalsSetR, out targetsSetR);
-                
+
 
                 for (int p = 0; p < inputSignalCount; p++)
                 {
@@ -414,24 +504,135 @@ namespace Experiment
                         }
                     });
                 }
-                if (error <= errorMin) return;
-                if (epoch > 0 && epoch % 1000 == 0) Console.WriteLine("epoch: {0}; error: {1}; derror: {2}", epoch, error, derrors.Average());
 
-                if (epoch > 0) derror = error - perror;
+                if (error <= errorMin)
+                    return new TrainingResults(epoch,
+                        error,
+                        errorMin,
+                        derrors.Average(),
+                        converganceRateMin,
+                        eta,
+                        alpha,
+                        TrainingResults.TrainingReason.Converged);
+
+                if (epoch > 0)
+                {
+                    derror = error - perror;
+                    derrors.Add(derror);
+                }
                 if (epoch > 1)
                 {
                     d2error = derror - pderror;
+                    d2errors.Add(d2error);
                 }
-                pderror = derror;
-                perror = error;
-                derrors.Add(derror);
-                if (epoch > converganceRateEpochs)
+                if (epoch > 2)
+                {
+                    d3error = d2error - pd2error;
+                    d3errors.Add(d3error);
+                }
+
+                if (derrors.Count > converganceRollingWindow)
                 {
                     derrors.RemoveAt(0);
-                    if (derrors.Average() > converganceRateMin) return;
+                    d2errors.RemoveAt(0);
+                    d3errors.RemoveAt(0);
                 }
+
+                pd2error = d2error;
+                pderror = derror;
+                perror = error;
+
+                if (epoch > 0 && epoch % converganceRateEpochs == 0)
+                    Console.WriteLine(
+                        "{0}, {1}, {2}, {3}, {4}, {5}, {6}",
+                        epoch,
+                        error,
+                        derrors.Average(),
+                        d2errors.Average(),
+                        d3errors.Average(),
+                        d2error / derror,
+                        eta);
+
+                if (epoch > rollingAvCount)
+                {
+                    if (derrors.Average() > converganceRateMin
+                        && epoch > converganceRateEpochs
+                        && epoch % converganceRollingWindow == 0)
+                        return new TrainingResults(epoch,
+                            error,
+                            errorMin,
+                            derrors.Average(),
+                            converganceRateMin,
+                            eta,
+                            alpha,
+                            TrainingResults.TrainingReason.DidNotConverge);
+
+                    if (autoAdjustEta)
+                        dEta();
+                }
+
                 error = 0;
             }
+
+            Console.WriteLine(
+                        "{0}, {1}, {2}, {3}, {4}, {5}, {6}",
+                        epoch,
+                        error,
+                        derrors.Average(),
+                        d2errors.Average(),
+                        d3errors.Average(),
+                        d2error / derror,
+                        eta);
+
+            return new TrainingResults(epoch,
+                            error,
+                            errorMin,
+                            derrors.Average(),
+                            converganceRateMin,
+                            eta,
+                            alpha,
+                            TrainingResults.TrainingReason.DidNotConverge
+                            | TrainingResults.TrainingReason.EpochMax);
+        }
+
+        public class TrainingResults
+        {
+            [Flags]
+            public enum TrainingReason : int
+            {
+                Converged = 0x0001,
+                DidNotConverge = 0x0010,
+                EpochMax = 0x1000
+            }
+
+            public TrainingResults(int epochs,
+                double finalError,
+                double targetError,
+                double finalErrorRate,
+                double targetErrorRate,
+                double eta,
+                double alpha,
+                TrainingReason reason)
+            {
+                Epochs = epochs;
+                FinalError = finalError;
+                TargetError = targetError;
+                FinalErrorRate = finalErrorRate;
+                TargetErrorRate = targetErrorRate;
+                Eta = eta;
+                Alpha = alpha;
+                Reason = reason;
+            }
+
+            public int Epochs { get; private set; }
+            public double FinalError { get; private set; }
+            public double TargetError { get; private set; }
+            public double FinalErrorRate { get; private set; }
+            public double TargetErrorRate { get; private set; }
+            public TrainingReason Reason { get; private set; }
+
+            public double Eta { get; private set; }
+            public double Alpha { get; private set; }
         }
 
         private void InitializeWeightsAndDeltas(double w0)
@@ -468,9 +669,9 @@ namespace Experiment
         private static Random _r = new Random();
         private double Gaussian(double mean, double stdDev)
         {
-            return mean 
-                + stdDev 
-                * (Math.Sqrt(-2.0 * Math.Log(_r.NextDouble()))) 
+            return mean
+                + stdDev
+                * (Math.Sqrt(-2.0 * Math.Log(_r.NextDouble())))
                 * (Math.Sin(2.0 * Math.PI * _r.NextDouble()));
         }
 
@@ -510,7 +711,7 @@ namespace Experiment
         /// <param name="a3"></param>
         public static Network<T> Create(
             Func<int, T[], double> inputTransform,
-            T[][] signals, 
+            T[][] signals,
             double[][] targets,
             int maxHiddenNeurons = 50,
             int populationSize = 100,
@@ -529,7 +730,7 @@ namespace Experiment
 
         private static Network<T> Create(
             Func<int, T[], double> inputTransform,
-            T[][] signals, 
+            T[][] signals,
             double[][] targets,
             int maxHiddenNeurons,
             int populationSize,
@@ -550,7 +751,7 @@ namespace Experiment
             Func<double> s = () => sCount;
             // (1) only modify structure when weight evolution fails, or we're evolve for a fixed set of iterations
             //Func<double> Pgs = () => sCount == 1 || double.MaxValue.Equals(acceptableError) ? tPgs * s() / S : 0;    
-            Func<double> Pgs = () =>  tPgs * s() / S;   // (1)
+            Func<double> Pgs = () => tPgs * s() / S;   // (1)
             Func<double> Pgw = () => tPgw * s() / S;    // (2)
             Func<double> SSg = () => tSSg * s() / S;    // (3)
             //Func<Func<double>, Func<double>, double> GL = (eb, eo) => ((eb() + 1)/(eo() + 1)) - 1;
@@ -658,7 +859,7 @@ namespace Experiment
             Fitness best = null;
             double pgs = 0, pgw = 0, ssg = 0;
             int keep = (int)((double)populationSize * .1);
-            while (generations > 0 && sCount > 0 && bestF > acceptableError)
+            while (generations > 0 && sCount > 0)
             {
                 if (generations % 10 == 0 || best == null)
                 {
@@ -668,16 +869,12 @@ namespace Experiment
                     ssg = SSg();
                 }
 
-                // mutate network, keeping top two parents for next gen
-                Fitness thisBest;
-                Mutate(networks, keep, pgs, pgw, ssg, out thisBest, acceptableError);
-
-                if (thisBest.F < bestF)
+                if (networks[0].F < bestF)
                 {
                     int lifespan = best == null ? 0 : best.Generations;
                     // new best fit in this generation was found
-                    best = thisBest;
-                    bestF = thisBest.F;
+                    best = networks[0];
+                    bestF = best.F;
                     // reset local min escape counter
                     sCount = S;
                     // update global mutation rates
@@ -686,28 +883,67 @@ namespace Experiment
                     tSSg = SSg();
                     Console.WriteLine(string.Format("G: {2}, L: {3}, F: {0}, Complexity: {1}", bestF, best.Complexity, generations, lifespan));
                 }
-                else if (best != null) best.Generations++;
-                //else if (thisBest.F > bestF) Debugger.Break();
+                else if (best != null)
+                {
+                    networks.Insert(0, best);
+                    networks.RemoveAt(networks.Count - 1);
+                    best.Generations++;
+                }
+
+                // mutate network, keeping top two parents for next gen
+                Mutate(networks, keep, pgs, pgw, ssg, acceptableError);
 
                 // run the networks
                 ApplySignals(networks, signals, targets);
 
+                // order by best fit
+                networks.Sort((f1, f2) =>
+                {
+                    int val = f1.F.CompareTo(f2.F);
+                    if (val == 0)
+                    {
+                        // fitness function values match, so prefer lesser complexity
+                        val = f1.Complexity.CompareTo(f2.Complexity);
+                    }
+                    return val;
+                });
+
+                if (networks[0].F <= acceptableError) break;
+
                 sCount--;
                 generations--;
-
-                if (acceptableError < double.MaxValue && sCount == 0)
-                {
-                    // try using backprop error training to improve the weights and biases
-                    networks[0].Network.Train(signals, targets, false, 0.0001, 0.6, 0.2, 1000000);
-                    sCount = S;
-                }
             }
 
-            return best.Network;
+            if (networks[0].F <= acceptableError)
+            {
+                Network<T> theBest = null;
+                double f = double.MaxValue;
+                foreach (var n in networks.Where(nn => nn.F <= acceptableError))
+                {
+                    var results = n.Network.AutoTrain(signals, targets, false);
+                    var nF = results.FinalError * n.Complexity;
+                    if (nF < f)
+                    {
+                        theBest = n.Network;
+                        f = nF;
+                    }
+                }
+                return theBest;
+            }
+
+            return networks[0].Network;
         }
 
         private static void ApplySignals(List<Fitness> networks, T[][] signals, double[][] targets)
         {
+            foreach (var n in networks)
+            {
+                var result = n.Network.AutoTrain(signals, targets, false, 0.000005, 0.2, 500, 2d, null, 0.0, 50, 25);
+                if (result.Reason == TrainingResults.TrainingReason.Converged)
+                {
+                    result = n.Network.AutoTrain(signals, targets, false, result.Eta, 0.2, 5000, 0.001, null, 0.0, 500, 150);
+                }
+            }
             for (int p = 0; p < targets.Length; p++)
             {
                 double[] target = targets[p];
@@ -720,32 +956,18 @@ namespace Experiment
             }
         }
 
-        private static void Mutate(List<Fitness> networks, 
-            int keep, 
-            double Pgs, 
-            double Pgw, 
+        private static void Mutate(List<Fitness> networks,
+            int keep,
+            double Pgs,
+            double Pgw,
             double SSg,
-            out Fitness best,
             double targetF = 10000)
         {
-            // order by best fit
-            networks.Sort((f1, f2) =>
-            {
-                int val = f1.F.CompareTo(f2.F);
-                if (val == 0)
-                {
-                    // fitness function values match, so prefer lesser complexity
-                    val = f1.Complexity.CompareTo(f2.Complexity);
-                }
-                return val;
-            });
-
             double Fbest = networks[0].F;
+            var nc = networks.Count;
 
-            keep = (int)((double)networks.Count - (double)(networks.Count - keep) * (1d / (Math.Pow(Math.Tanh(Fbest/targetF), 2d))));
+            keep = (int)((float)keep + (float)nc * (targetF / Fbest).Clamp(0d, 1d) / 2f);
 
-            best = networks[0];
-            
             for (int n = 0; n < keep; n++)
             {
                 networks[n].Generations++;
@@ -778,15 +1000,15 @@ namespace Experiment
 
         }
 
-        private static Fitness Mutate(Fitness fitness, 
-            Func<Fitness, double> Ps, 
-            Func<Fitness, double> Pw, 
+        private static Fitness Mutate(Fitness fitness,
+            Func<Fitness, double> Ps,
+            Func<Fitness, double> Pw,
             Func<Fitness, double> SS)
         {
             return new Fitness(
                 fitness.Network.Mutate(Ps(fitness), Pw(fitness), SS(fitness)),
                 fitness.A1,
-                fitness.A2, 
+                fitness.A2,
                 fitness.A3,
                 fitness.BasePls,
                 fitness.BasePlw,
@@ -826,7 +1048,7 @@ namespace Experiment
                 }
             }
             var clone = new Network<T>(this._inputTransform, neurons.Values.ToArray());
-            
+
             return clone;
         }
 
@@ -847,7 +1069,7 @@ namespace Experiment
                     {
                         source.Bias += adjust(SS);
                     }
-                    if (source.GetType().Equals(typeof (Neuron))
+                    if (source.GetType().Equals(typeof(Neuron))
                         && source.Axons.Count == 0
                         && source.Dendrites.Count == 0)
                     {
@@ -915,15 +1137,15 @@ namespace Experiment
                 || child.InputConnectionCount == 0
                 || child.OutputConnectionCount == 0);
 
-            
+
             return child;
         }
 
         private static List<Fitness> CreateNetworks(
-            Func<int, T[], double> inputTransform, 
-            int inputCount, 
-            int outputCount, 
-            int maxHiddenNeurons, 
+            Func<int, T[], double> inputTransform,
+            int inputCount,
+            int outputCount,
+            int maxHiddenNeurons,
             int populationSize,
             double a1,
             double a2,
@@ -937,7 +1159,7 @@ namespace Experiment
             {
                 population.Add(
                     new Fitness(
-                            Network<T>.Create(new int[] { inputCount, maxHiddenNeurons, outputCount},
+                            Network<T>.Create(new int[] { inputCount, maxHiddenNeurons, outputCount },
                             inputTransform),
                             a1,
                             a2,
@@ -972,7 +1194,7 @@ namespace Experiment
             {
                 get
                 {
-                    double val = (100.0/(_patternCount*Network.Outputs.Length))*_sumSqr;
+                    double val = (100.0 / (_patternCount * Network.Outputs.Length)) * _sumSqr;
                     if (double.NaN.Equals(val))
                     {
                         return double.MaxValue;
@@ -988,11 +1210,11 @@ namespace Experiment
             public double BasePlw { get; private set; }
             public double BaseSSl { get; private set; }
             public int Generations { get; set; }
-  
+
 
             public double Pls(double Fbest)
             {
-                return BasePls*(1 - Fbest/F); // (4)
+                return BasePls * (1 - Fbest / F); // (4)
             }
             public double Plw(double Fbest)
             {
@@ -1011,7 +1233,7 @@ namespace Experiment
                 {
                     if (_updateF)
                     {
-                        _f = A1*TrainingError + A2*Complexity;
+                        _f = A1 * TrainingError + A2 * Complexity;
                         _updateF = false;
                     }
                     if (_f < 0) Debugger.Break();
@@ -1043,8 +1265,7 @@ namespace Experiment
             public Fitness Clone()
             {
                 return new Fitness(this.Network.Clone(),
-                    this.A1, this.A2, this.A3, this.BasePls, this.BasePlw, this.BaseSSl)
-                    { Generations = this.Generations };
+                    this.A1, this.A2, this.A3, this.BasePls, this.BasePlw, this.BaseSSl) { Generations = this.Generations };
             }
 
             public override string ToString()
@@ -1057,7 +1278,7 @@ namespace Experiment
         {
             StringBuilder sb = new StringBuilder();
             HashSet<object> written = new HashSet<object>();
-            
+
             Func<Neuron, int, bool> traverse = (n, level) =>
             {
                 return true;
@@ -1105,8 +1326,25 @@ namespace Experiment
             return sb.ToString();
         }
 
+        public void Save(Stream destination)
+        {
+            using (StreamWriter sw = new StreamWriter(destination))
+            {
+                foreach (var n in Neurons)
+                {
+                    sw.Write(n.ToString());
+                    sw.Write(Environment.NewLine);
+                    foreach (var s in n.Axons)
+                    {
+                        sw.Write(s.ToString());
+                        sw.Write(Environment.NewLine);
+                    }
+                }
+            }
+        }
+
         int _cc = -1;
-        public int ConnectionCount 
+        public int ConnectionCount
         {
             get
             {
@@ -1142,6 +1380,16 @@ namespace Experiment
                 }
                 return _ccO;
             }
+        }
+    }
+
+    public static class doubleEx
+    {
+        public static double Clamp(this double value, double min, double max)
+        {
+            if (value > max) return max;
+            if (value < min) return min;
+            return value;
         }
     }
 }
